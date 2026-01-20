@@ -484,18 +484,25 @@ namespace InfiniteWin
             double originalWidth = thumbnail.Width;
             double originalHeight = thumbnail.Height;
             
-            // Handle selection when clicked
-            thumbnail.MouseDown += (s, args) =>
+            // Handle selection changes
+            thumbnail.SelectionChanged += (s, args) =>
             {
-                // Deselect previous thumbnail
-                if (_selectedThumbnail != null && _selectedThumbnail != thumbnail)
+                // When this thumbnail is selected, deselect all others
+                if (thumbnail.IsSelected)
                 {
-                    _selectedThumbnail.IsSelected = false;
+                    foreach (UIElement child in MainCanvas.Children)
+                    {
+                        if (child is WindowThumbnailControl otherThumbnail && otherThumbnail != thumbnail)
+                        {
+                            otherThumbnail.IsSelected = false;
+                        }
+                    }
+                    _selectedThumbnail = thumbnail;
                 }
-                
-                // Select this thumbnail
-                _selectedThumbnail = thumbnail;
-                thumbnail.IsSelected = true;
+                else if (_selectedThumbnail == thumbnail)
+                {
+                    _selectedThumbnail = null;
+                }
             };
             
             // Handle close event

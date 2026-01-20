@@ -140,13 +140,20 @@ namespace InfiniteWin
         private double _savedWidth;
         private double _savedHeight;
 
+        // Selection changed event
+        public event EventHandler? SelectionChanged;
+
         public bool IsSelected
         {
             get => _isSelected;
             set
             {
-                _isSelected = value;
-                UpdateSelectionVisual();
+                if (_isSelected != value)
+                {
+                    _isSelected = value;
+                    UpdateSelectionVisual();
+                    SelectionChanged?.Invoke(this, EventArgs.Empty);
+                }
             }
         }
 
@@ -548,6 +555,9 @@ namespace InfiniteWin
             // Don't start drag if clicking close button or already resizing
             if (e.OriginalSource is Button || _isResizing)
                 return;
+
+            // Select this thumbnail on click
+            IsSelected = true;
 
             // Check for double-click
             DateTime now = DateTime.Now;
