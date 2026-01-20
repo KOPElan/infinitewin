@@ -85,7 +85,15 @@ namespace InfiniteWin
         {
             if (_selectedThumbnail != null)
             {
-                _selectedThumbnail.ToggleMaximize(ActualWidth, ActualHeight);
+                // Use RenderSize which is more reliable than ActualWidth/ActualHeight
+                double width = RenderSize.Width;
+                double height = RenderSize.Height;
+                
+                // Validate dimensions
+                if (width > 0 && height > 0)
+                {
+                    _selectedThumbnail.ToggleMaximize(width, height);
+                }
             }
         }
 

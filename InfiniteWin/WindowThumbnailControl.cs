@@ -650,13 +650,24 @@ namespace InfiniteWin
         /// </summary>
         public void ToggleMaximize(double parentWidth, double parentHeight)
         {
+            // Validate parent dimensions
+            if (parentWidth <= 0 || parentHeight <= 0)
+            {
+                System.Diagnostics.Debug.WriteLine("Cannot maximize: invalid parent dimensions");
+                return;
+            }
+
             if (Parent is Canvas canvas)
             {
                 if (!_isMaximized)
                 {
                     // Save current state
-                    _savedLeft = Canvas.GetLeft(this);
-                    _savedTop = Canvas.GetTop(this);
+                    double currentLeft = Canvas.GetLeft(this);
+                    double currentTop = Canvas.GetTop(this);
+                    
+                    // Handle NaN values (not yet positioned)
+                    _savedLeft = double.IsNaN(currentLeft) ? 0 : currentLeft;
+                    _savedTop = double.IsNaN(currentTop) ? 0 : currentTop;
                     _savedWidth = Width;
                     _savedHeight = Height;
 
