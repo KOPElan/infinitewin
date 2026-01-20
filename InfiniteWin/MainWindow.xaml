@@ -1,0 +1,54 @@
+<Window x:Class="InfiniteWin.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="InfiniteWin - Virtual Canvas Desktop" 
+        Height="800" Width="1200"
+        Background="#FF2B2B2B"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <!-- Main Canvas Container with Scrolling -->
+        <Border x:Name="CanvasBorder" ClipToBounds="True" Background="#FF2B2B2B">
+            <Canvas x:Name="MainCanvas" Background="Transparent">
+                <Canvas.RenderTransform>
+                    <TransformGroup>
+                        <ScaleTransform x:Name="CanvasScaleTransform" ScaleX="1" ScaleY="1"/>
+                        <TranslateTransform x:Name="CanvasTranslateTransform" X="0" Y="0"/>
+                    </TransformGroup>
+                </Canvas.RenderTransform>
+            </Canvas>
+        </Border>
+
+        <!-- Toolbar (Top Right) -->
+        <StackPanel Orientation="Horizontal" 
+                    HorizontalAlignment="Right" 
+                    VerticalAlignment="Top" 
+                    Margin="10"
+                    Background="#CC000000">
+            <Button x:Name="AddWindowButton" 
+                    Content="Add Window" 
+                    Padding="10,5" 
+                    Margin="5"
+                    Click="AddWindowButton_Click"/>
+            <Button x:Name="ResetViewButton" 
+                    Content="Reset View" 
+                    Padding="10,5" 
+                    Margin="5"
+                    Click="ResetViewButton_Click"/>
+            <TextBlock x:Name="ZoomLevelText" 
+                       Text="100%" 
+                       Foreground="#FFFFFFFF" 
+                       VerticalAlignment="Center" 
+                       Margin="10,5"
+                       FontSize="14"/>
+        </StackPanel>
+
+        <!-- Hint Text (Bottom Center) -->
+        <TextBlock x:Name="HintText" 
+                   Text="Right-click or Middle-click to pan • Mouse wheel to zoom • Double-click window to activate"
+                   Foreground="#88FFFFFF" 
+                   HorizontalAlignment="Center" 
+                   VerticalAlignment="Bottom" 
+                   Margin="10"
+                   FontSize="14"/>
+    </Grid>
+</Window>
