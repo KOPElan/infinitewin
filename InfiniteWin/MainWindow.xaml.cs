@@ -37,7 +37,8 @@ namespace InfiniteWin
             InitializeComponent();
             
             // Attach event handlers for canvas interaction
-            MainCanvas.MouseWheel += Canvas_MouseWheel;
+            // MouseWheel is attached to the Window so it works everywhere, not just on the canvas
+            this.MouseWheel += Canvas_MouseWheel;
             MainCanvas.MouseDown += Canvas_MouseDown;
             MainCanvas.MouseMove += Canvas_MouseMove;
             MainCanvas.MouseUp += Canvas_MouseUp;
@@ -150,11 +151,8 @@ namespace InfiniteWin
         /// </summary>
         private void Canvas_MouseWheel(object sender, MouseWheelEventArgs e)
         {
-            var canvas = sender as Canvas;
-            if (canvas == null) return;
-
             // Get mouse position relative to canvas
-            Point mousePos = e.GetPosition(canvas);
+            Point mousePos = e.GetPosition(MainCanvas);
 
             // Calculate zoom factor
             double zoomFactor = e.Delta > 0 ? (1 + ZoomSpeed) : (1 - ZoomSpeed);
