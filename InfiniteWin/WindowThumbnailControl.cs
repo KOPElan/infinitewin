@@ -556,7 +556,7 @@ namespace InfiniteWin
         /// </summary>
         public void SetThumbnailVisibility(bool visible)
         {
-            if (_thumbnail == IntPtr.Zero)
+            if (_thumbnail == IntPtr.Zero || _hostBorder == null)
                 return;
 
             try
