@@ -8,29 +8,44 @@
 
 ## 📖 项目简介
 
-InfiniteWin 是一个创新的 WPF 桌面应用程序，它提供了一个无限的虚拟画布，让您可以将任何 Windows 应用窗口作为缩略图放置在画布上。所有窗口缩略图会随着画布的缩放而缩放，帮助您更好地组织和管理工作区。
+InfiniteWin 是一个创新的 WPF 桌面应用程序，它提供了一个无限的虚拟画布，让您可以将任何 Windows 应用窗口作为**实时缩略图**放置在画布上。所有窗口缩略图会随着画布的缩放而缩放，帮助您更好地组织和管理工作区。
 
-灵感来源于美术工具 PureRef，但专为应用窗口管理而设计。
+**灵感来源**：美术工具 PureRef，但专为应用窗口管理而设计。
+
+**核心优势**：
+- ✅ 实时显示窗口内容（使用 DWM API）
+- ✅ 无限缩放画布（10% - 500%）
+- ✅ 保持窗口原始宽高比
+- ✅ 支持最小化窗口正确显示
+- ✅ 高分辨率缩略图（最大 800×600）
 
 ## ✨ 核心特性
 
 ### 虚拟画布
 - 🔍 **可缩放画布**: 支持 10% 到 500% 的缩放范围
-- 🖱️ **鼠标滚轮缩放**: 以鼠标位置为中心进行缩放
-- ✋ **拖拽平移**: 右键或中键拖动画布
-- 🎨 **暗色主题**: 现代化的深色界面设计
+- 🖱️ **鼠标滚轮缩放**: 以鼠标位置为中心进行缩放，精确控制视图
+- ✋ **拖拽平移**: 右键或中键拖动画布，流畅导航
+- 🎨 **暗色主题**: 现代化的深色界面设计，减少视觉疲劳
+- 📏 **实时缩放显示**: 工具栏显示当前缩放百分比
 
 ### 窗口管理
-- 🪟 **实时窗口缩略图**: 使用 Windows DWM API 实时显示窗口内容
+- 🪟 **实时窗口缩略图**: 使用 Windows DWM (Desktop Window Manager) API 实时显示窗口内容
+- 📐 **保持宽高比**: 自动识别源窗口尺寸，保持原始宽高比，避免变形
+- 🔄 **智能尺寸**: 
+  - 最大分辨率：800×600 像素
+  - 最小尺寸：200 像素
+  - 宽高比限制：0.2 - 5.0（防止极端变形）
+- 💤 **最小化窗口支持**: 使用 `DwmQueryThumbnailSourceSize` 获取实际内容尺寸，即使窗口最小化也能正确显示
 - 📌 **拖放定位**: 在画布上自由移动窗口缩略图
-- 🖱️ **双击激活**: 双击缩略图即可激活原始窗口
-- ❌ **便捷关闭**: 每个缩略图都有独立的关闭按钮
-- 🔵 **视觉反馈**: 蓝色高亮边框和圆角设计
+- 🖱️ **双击激活**: 双击缩略图即可激活原始窗口，快速切换
+- ❌ **便捷关闭**: 每个缩略图都有独立的关闭按钮（× 按钮）
+- 🔵 **视觉反馈**: 蓝色高亮边框（#6496FF）和圆角设计
 
 ### 窗口选择
-- 📋 **智能枚举**: 自动列出所有可见的窗口
-- 🔍 **标题显示**: 清晰展示窗口标题
+- 📋 **智能枚举**: 自动列出所有可见的顶层窗口
+- 🔍 **标题显示**: 清晰展示窗口标题，按字母顺序排列
 - ⚡ **快速添加**: 支持双击或点击确定添加窗口
+- 🚫 **智能过滤**: 自动过滤空标题和不可见窗口
 
 ## 🎮 使用说明
 
@@ -58,29 +73,65 @@ InfiniteWin 是一个创新的 WPF 桌面应用程序，它提供了一个无限
 | 激活窗口 | 双击缩略图 |
 | 重置视图 | 点击 Reset View 按钮 |
 
+### 使用场景
+
+- 📚 **多任务管理**: 同时查看多个应用窗口的状态
+- 🎨 **参考素材**: 将参考图片、文档窗口放在画布上作为参考
+- 🖥️ **远程监控**: 监控多个应用程序的运行状态
+- 📊 **演示准备**: 组织演示所需的各个窗口
+- 🎮 **游戏多开**: 管理多个游戏或应用实例
+
 ## 🛠️ 技术栈
 
 ### 框架与平台
 - **.NET 8.0**: 现代化的 .NET 平台
 - **WPF (Windows Presentation Foundation)**: 用于构建丰富的桌面应用
+- **C# 10**: 使用最新的 C# 语言特性
 
-### Windows API
-- **DWM API (Desktop Window Manager)**:
-  - `DwmRegisterThumbnail` - 注册窗口缩略图
-  - `DwmUnregisterThumbnail` - 注销缩略图
-  - `DwmUpdateThumbnailProperties` - 更新缩略图属性
-  - `DwmQueryThumbnailSourceSize` - 查询源窗口大小
+### Windows API 集成
 
-- **User32 API**:
-  - `EnumWindows` - 枚举所有顶层窗口
-  - `IsWindowVisible` - 检查窗口可见性
-  - `GetWindowText` - 获取窗口标题
-  - `SetForegroundWindow` - 激活窗口
+#### DWM API (Desktop Window Manager)
+- `DwmRegisterThumbnail` - 注册窗口缩略图，建立缩略图句柄
+- `DwmUnregisterThumbnail` - 注销缩略图，释放资源
+- `DwmUpdateThumbnailProperties` - 更新缩略图属性（位置、大小、透明度）
+- `DwmQueryThumbnailSourceSize` - 查询源窗口内容大小（用于最小化窗口）
 
-### 核心技术
-- **P/Invoke**: 用于调用 Win32 API
-- **WPF Transforms**: ScaleTransform 和 TranslateTransform 实现画布缩放和平移
-- **IDisposable Pattern**: 确保资源正确清理
+#### User32 API
+- `EnumWindows` - 枚举所有顶层窗口
+- `IsWindowVisible` - 检查窗口可见性
+- `GetWindowText` - 获取窗口标题
+- `GetWindowRect` - 获取窗口位置和尺寸
+- `SetForegroundWindow` - 激活窗口到前台
+- `IsWindow` - 验证窗口句柄有效性
+
+### 核心技术实现
+
+#### 画布变换系统
+- **ScaleTransform**: 实现画布缩放（10% - 500%）
+- **TranslateTransform**: 实现画布平移
+- **TransformGroup**: 组合多个变换
+- **鼠标中心缩放**: 使用矩阵变换计算，确保缩放以鼠标位置为中心
+
+#### DWM 缩略图同步
+- **延迟渲染**: 使用 `Dispatcher.BeginInvoke` 确保布局完成后更新
+- **双点变换**: 同时变换左上角和右下角坐标，确保缩放正确
+- **实时更新**: 拖动、缩放、平移时自动更新所有缩略图位置
+- **强制布局**: 使用 `UpdateLayout()` 确保变换已应用
+
+#### 资源管理
+- **IDisposable Pattern**: 所有缩略图控件实现正确的资源释放
+- **自动清理**: 窗口关闭时自动注销所有 DWM 缩略图
+- **异常处理**: 所有 Win32 API 调用都有异常处理
+- **句柄验证**: 使用前验证窗口句柄有效性
+
+#### 宽高比保持算法
+```csharp
+// 1. 获取源窗口尺寸（优先使用 DwmQueryThumbnailSourceSize）
+// 2. 计算宽高比并限制范围（0.2 - 5.0）
+// 3. 按照最大尺寸约束（800×600）缩放
+// 4. 确保最小尺寸（200px）
+// 5. 保持宽高比的同时适配约束
+```
 
 ## 🚀 构建和运行
 
@@ -88,6 +139,8 @@ InfiniteWin 是一个创新的 WPF 桌面应用程序，它提供了一个无限
 - **操作系统**: Windows 10 或 Windows 11
 - **.NET SDK**: .NET 8.0 或更高版本
 - **开发工具** (可选): Visual Studio 2022 或 Visual Studio Code
+- **内存**: 建议 4GB 以上
+- **DWM服务**: Windows Desktop Window Manager 服务必须运行
 
 ### 构建步骤
 
@@ -110,45 +163,95 @@ InfiniteWin 是一个创新的 WPF 桌面应用程序，它提供了一个无限
 
 ### 发布应用
 
-创建独立可执行文件:
+创建独立可执行文件（包含 .NET 运行时）:
 ```bash
 dotnet publish -c Release -r win-x64 --self-contained true
 ```
 
-生成的可执行文件位于 `bin/Release/net6.0-windows/win-x64/publish/`
+创建依赖框架的可执行文件（需要安装 .NET 8.0）:
+```bash
+dotnet publish -c Release -r win-x64 --self-contained false
+```
+
+生成的可执行文件位于 `bin/Release/net8.0-windows/win-x64/publish/`
 
 ## 📁 项目结构
 
 ```
-InfiniteWin/
-├── InfiniteWin.csproj           # WPF 项目文件
-├── App.xaml                      # 应用程序定义
-├── App.xaml.cs                   # 应用程序逻辑
-├── MainWindow.xaml               # 主窗口 UI
-├── MainWindow.xaml.cs            # 主窗口逻辑（画布交互）
-├── WindowThumbnailControl.cs     # 窗口缩略图控件（DWM API）
-├── WindowSelectorDialog.xaml     # 窗口选择器 UI
-└── WindowSelectorDialog.xaml.cs  # 窗口选择器逻辑
+infinitewin/
+├── InfiniteWin/                      # 主项目目录
+│   ├── InfiniteWin.csproj           # WPF 项目文件（.NET 8.0）
+│   ├── App.xaml                      # 应用程序定义
+│   ├── App.xaml.cs                   # 应用程序逻辑
+│   ├── MainWindow.xaml               # 主窗口 UI 定义
+│   ├── MainWindow.xaml.cs            # 主窗口逻辑（画布交互、缩放平移）
+│   ├── WindowThumbnailControl.cs     # 窗口缩略图控件（DWM API 封装）
+│   ├── WindowSelectorDialog.xaml     # 窗口选择器 UI
+│   └── WindowSelectorDialog.xaml.cs  # 窗口选择器逻辑（窗口枚举）
+├── InfiniteWin.sln                   # Visual Studio 解决方案文件
+├── README.md                         # 项目说明文档
+├── DEVELOPER.md                      # 开发者技术文档
+├── UI_DESIGN.md                      # UI 设计规范文档
+└── LICENSE                           # GPL-3.0 许可证
 ```
 
 ## 🎨 设计规范
 
 ### 颜色方案
-- **背景色**: `#FF2B2B2B` (深灰)
-- **窗口边框**: `#FF6496FF` (蓝色)
-- **工具栏背景**: `#CC000000` (半透明黑)
-- **提示文字**: `#88FFFFFF` (半透明白)
-- **关闭按钮**: `#C8FF0000` (半透明红)
+- **背景色**: `#FF2B2B2B` (深灰) - 主窗口背景
+- **窗口边框**: `#FF6496FF` (蓝色) - 缩略图边框高亮
+- **工具栏背景**: `#CC000000` (半透明黑) - 工具栏背景
+- **提示文字**: `#88FFFFFF` (半透明白) - 底部提示文字
+- **关闭按钮**: `#C8FF0000` (半透明红) - 缩略图关闭按钮
+- **标题栏**: `#CC000000` (半透明黑) - 缩略图标题栏
+
+### 尺寸规范
+- **主窗口**: 默认 1200×800 像素
+- **缩略图最大尺寸**: 800×600 像素
+- **缩略图最小尺寸**: 200 像素（较小维度）
+- **边框厚度**: 2 像素
+- **圆角半径**: 外 8px，内 6px
+- **标题栏高度**: 25 像素
 
 ## 🔮 未来功能规划
 
-- [ ] 窗口缩略图大小调整
-- [ ] 布局保存和加载功能
-- [ ] 更多快捷键支持
-- [ ] 窗口分组功能
-- [ ] 搜索和过滤窗口
+### 短期规划
+- [ ] 窗口缩略图大小调整（拖拽边角调整）
+- [ ] 布局保存和加载功能（JSON 格式）
+- [ ] 更多快捷键支持（Ctrl+Z 撤销等）
+- [ ] 窗口搜索和筛选功能
+
+### 中期规划
+- [ ] 窗口分组功能（创建组容器）
+- [ ] 导出画布为图片（PNG/JPG）
 - [ ] 多显示器支持优化
-- [ ] 导出画布为图片
+- [ ] 窗口自动刷新选项
+
+### 长期规划
+- [ ] 插件系统支持
+- [ ] 云端布局同步
+- [ ] 触摸屏优化
+- [ ] 自定义主题支持
+
+## ⚙️ 技术特点
+
+### 性能优化
+- ✅ 使用 `Dispatcher.BeginInvoke` 延迟渲染，避免阻塞 UI 线程
+- ✅ 仅在需要时更新缩略图，减少 DWM API 调用
+- ✅ 双击检测使用时间戳而非事件（Border 控件限制）
+- ✅ 正确的资源释放，避免内存泄漏
+
+### 健壮性
+- ✅ 所有 Win32 API 调用都有异常处理
+- ✅ 窗口句柄验证，处理窗口被关闭的情况
+- ✅ 宽高比限制，防止极端变形
+- ✅ 最小化窗口特殊处理
+
+### 用户体验
+- ✅ 平滑的缩放和平移动画
+- ✅ 鼠标中心缩放，直观的操作体验
+- ✅ 实时的缩放百分比显示
+- ✅ 清晰的视觉反馈（边框、圆角、颜色）
 
 ## 📄 许可证
 
@@ -158,6 +261,12 @@ InfiniteWin/
 
 欢迎提交 Issue 和 Pull Request！
 
+**贡献指南**：
+- 遵循现有代码风格
+- 添加适当的注释
+- 测试你的更改
+- 更新相关文档
+
 ## 👨‍💻 作者
 
 **KOPElan**
@@ -165,6 +274,13 @@ InfiniteWin/
 ## 🙏 致谢
 
 灵感来源于 [PureRef](https://www.pureref.com/) - 一个优秀的参考图管理工具。
+
+## 📞 支持
+
+如有问题或建议，请：
+- 提交 [Issue](https://github.com/KOPElan/infinitewin/issues)
+- 查看 [开发者文档](DEVELOPER.md)
+- 查看 [UI 设计文档](UI_DESIGN.md)
 
 ---
 
