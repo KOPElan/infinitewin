@@ -40,6 +40,9 @@ namespace InfiniteWin
         private static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
 
         [DllImport("user32.dll")]
+        private static extern IntPtr GetParent(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
         private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
         [DllImport("user32.dll")]
@@ -441,8 +444,8 @@ namespace InfiniteWin
 
             try
             {
-                // Save original parent (usually null for top-level windows)
-                _originalParent = SetParent(_sourceWindow, IntPtr.Zero);
+                // Save original parent before modifying it
+                _originalParent = GetParent(_sourceWindow);
                 
                 // Save original window style
                 _originalStyle = GetWindowLong(_sourceWindow, GWL_STYLE);
