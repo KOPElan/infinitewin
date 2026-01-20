@@ -11,17 +11,24 @@ namespace InfiniteWin
     {
         public override IntPtr Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            if (reader.TokenType == JsonTokenType.Number)
+            try
             {
-                return new IntPtr(reader.GetInt64());
-            }
-            else if (reader.TokenType == JsonTokenType.String)
-            {
-                string? value = reader.GetString();
-                if (long.TryParse(value, out long result))
+                if (reader.TokenType == JsonTokenType.Number)
                 {
-                    return new IntPtr(result);
+                    return new IntPtr(reader.GetInt64());
                 }
+                else if (reader.TokenType == JsonTokenType.String)
+                {
+                    string? value = reader.GetString();
+                    if (long.TryParse(value, out long result))
+                    {
+                        return new IntPtr(result);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to convert IntPtr: {ex.Message}");
             }
             return IntPtr.Zero;
         }

@@ -18,6 +18,7 @@ namespace InfiniteWin
         private const double MinZoom = 0.1;
         private const double MaxZoom = 5.0;
         private const double ZoomSpeed = 0.1;
+        private const double PositionChangeThreshold = 0.1; // Minimum position change to trigger undo
 
         private Point _lastMousePosition;
         private bool _isPanning = false;
@@ -353,6 +354,7 @@ namespace InfiniteWin
             UpdateZoomDisplay();
 
             // Restore windows
+            int skippedCount = 0;
             foreach (var windowData in layout.Windows)
             {
                 try
@@ -360,6 +362,8 @@ namespace InfiniteWin
                     // Check if window still exists
                     if (!WindowThumbnailControl.IsWindowValid(windowData.WindowHandle))
                     {
+                        skippedCount++;
+                        System.Diagnostics.Debug.WriteLine($"Skipping window '{windowData.WindowTitle}' - window no longer exists");
                         continue; // Skip windows that no longer exist
                     }
 
@@ -382,8 +386,14 @@ namespace InfiniteWin
                 }
                 catch (Exception ex)
                 {
+                    skippedCount++;
                     System.Diagnostics.Debug.WriteLine($"Failed to restore window {windowData.WindowTitle}: {ex.Message}");
                 }
+            }
+
+            if (skippedCount > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"Skipped {skippedCount} window(s) that no longer exist");
             }
 
             // Update all thumbnails
@@ -450,7 +460,8 @@ namespace InfiniteWin
                     double newTop = Canvas.GetTop(thumbnail);
                     
                     // Only add to undo stack if position actually changed
-                    if (Math.Abs(newLeft - originalLeft) > 0.1 || Math.Abs(newTop - originalTop) > 0.1)
+                    if (Math.Abs(newLeft - originalLeft) > PositionChangeThreshold || 
+                        Math.Abs(newTop - originalTop) > PositionChangeThreshold)
                     {
                         var moveCommand = new MoveWindowCommand(thumbnail, originalLeft, originalTop, newLeft, newTop);
                         _undoStack.Push(moveCommand);
@@ -476,8 +487,10 @@ namespace InfiniteWin
                     double newTop = Canvas.GetTop(thumbnail);
                     
                     // Only add to undo stack if size or position actually changed
-                    if (Math.Abs(newWidth - originalWidth) > 0.1 || Math.Abs(newHeight - originalHeight) > 0.1 ||
-                        Math.Abs(newLeft - originalLeft) > 0.1 || Math.Abs(newTop - originalTop) > 0.1)
+                    if (Math.Abs(newWidth - originalWidth) > PositionChangeThreshold || 
+                        Math.Abs(newHeight - originalHeight) > PositionChangeThreshold ||
+                        Math.Abs(newLeft - originalLeft) > PositionChangeThreshold || 
+                        Math.Abs(newTop - originalTop) > PositionChangeThreshold)
                     {
                         var resizeCommand = new ResizeWindowCommand(thumbnail, 
                             originalWidth, originalHeight, originalLeft, originalTop,

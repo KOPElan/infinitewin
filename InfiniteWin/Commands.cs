@@ -45,17 +45,23 @@ namespace InfiniteWin
     public class RemoveWindowCommand : ICommand
     {
         private readonly Canvas _canvas;
-        private readonly WindowThumbnailControl _thumbnail;
+        private WindowThumbnailControl _thumbnail;
+        private readonly IntPtr _sourceWindow;
         private readonly double _left;
         private readonly double _top;
+        private readonly double _width;
+        private readonly double _height;
         private bool _executed = false;
 
         public RemoveWindowCommand(Canvas canvas, WindowThumbnailControl thumbnail)
         {
             _canvas = canvas;
             _thumbnail = thumbnail;
+            _sourceWindow = thumbnail.SourceWindow;
             _left = Canvas.GetLeft(thumbnail);
             _top = Canvas.GetTop(thumbnail);
+            _width = thumbnail.Width;
+            _height = thumbnail.Height;
         }
 
         public void Execute()
@@ -72,6 +78,10 @@ namespace InfiniteWin
         {
             if (_executed)
             {
+                // Create a new thumbnail control instead of reusing the disposed one
+                _thumbnail = new WindowThumbnailControl(_sourceWindow);
+                _thumbnail.Width = _width;
+                _thumbnail.Height = _height;
                 Canvas.SetLeft(_thumbnail, _left);
                 Canvas.SetTop(_thumbnail, _top);
                 _canvas.Children.Add(_thumbnail);
