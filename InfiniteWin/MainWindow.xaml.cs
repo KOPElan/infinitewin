@@ -62,6 +62,9 @@ namespace InfiniteWin
 
             // Update zoom display
             UpdateZoomDisplay();
+            
+            // Update all thumbnails after zoom
+            UpdateAllThumbnails();
 
             e.Handled = true;
         }
@@ -96,6 +99,10 @@ namespace InfiniteWin
                 CanvasTranslateTransform.Y += delta.Y;
 
                 _lastMousePosition = currentPosition;
+                
+                // Update all thumbnails during pan
+                UpdateAllThumbnails();
+                
                 e.Handled = true;
             }
         }
@@ -162,6 +169,9 @@ namespace InfiniteWin
             CanvasTranslateTransform.X = 0;
             CanvasTranslateTransform.Y = 0;
             UpdateZoomDisplay();
+            
+            // Update all thumbnails after reset
+            UpdateAllThumbnails();
         }
 
         /// <summary>
@@ -194,6 +204,21 @@ namespace InfiniteWin
             {
                 MessageBox.Show($"Failed to add window thumbnail: {ex.Message}", 
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Update all window thumbnails on the canvas
+        /// Called after zoom/pan operations to update DWM thumbnail positions
+        /// </summary>
+        private void UpdateAllThumbnails()
+        {
+            foreach (UIElement child in MainCanvas.Children)
+            {
+                if (child is WindowThumbnailControl thumbnail)
+                {
+                    thumbnail.UpdateThumbnail();
+                }
             }
         }
 

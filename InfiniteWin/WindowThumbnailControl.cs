@@ -252,7 +252,11 @@ namespace InfiniteWin
             }
         }
 
-        private void UpdateThumbnail()
+        /// <summary>
+        /// Update the DWM thumbnail position and size
+        /// Call this when the control position changes or canvas transforms change
+        /// </summary>
+        public void UpdateThumbnail()
         {
             if (_thumbnail == IntPtr.Zero || _hostBorder == null)
                 return;
@@ -344,6 +348,10 @@ namespace InfiniteWin
                 Canvas.SetTop(this, top + delta.Y);
 
                 _dragStartPosition = currentPosition;
+                
+                // Update DWM thumbnail position during drag
+                UpdateThumbnail();
+                
                 e.Handled = true;
             }
         }
