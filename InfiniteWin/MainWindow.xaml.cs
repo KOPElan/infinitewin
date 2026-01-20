@@ -18,7 +18,9 @@ namespace InfiniteWin
         private const double MinZoom = 0.1;
         private const double MaxZoom = 5.0;
         private const double ZoomSpeed = 0.1;
-        private const double PositionChangeThreshold = 0.1; // Minimum position change to trigger undo
+        // Minimum position change (in pixels) to trigger undo - prevents excessive undo entries 
+        // during minor drag adjustments or float precision differences
+        private const double PositionChangeThreshold = 0.1;
 
         private Point _lastMousePosition;
         private bool _isPanning = false;
@@ -375,12 +377,8 @@ namespace InfiniteWin
                     thumbnail.Width = windowData.Width;
                     thumbnail.Height = windowData.Height;
                     
-                    // Handle close event
-                    thumbnail.CloseRequested += (s, args) =>
-                    {
-                        MainCanvas.Children.Remove(thumbnail);
-                        thumbnail.Dispose();
-                    };
+                    // Setup event handlers
+                    SetupThumbnailEventHandlers(thumbnail);
                     
                     MainCanvas.Children.Add(thumbnail);
                 }
@@ -433,72 +431,8 @@ namespace InfiniteWin
                 Canvas.SetLeft(thumbnail, x);
                 Canvas.SetTop(thumbnail, y);
                 
-                // Store original position for move tracking
-                double originalLeft = x;
-                double originalTop = y;
-                double originalWidth = thumbnail.Width;
-                double originalHeight = thumbnail.Height;
-                
-                // Handle close event
-                thumbnail.CloseRequested += (s, args) =>
-                {
-                    var removeCommand = new RemoveWindowCommand(MainCanvas, thumbnail);
-                    ExecuteCommand(removeCommand);
-                };
-
-                // Track drag start position for undo
-                thumbnail.DragStarted += (s, args) =>
-                {
-                    originalLeft = Canvas.GetLeft(thumbnail);
-                    originalTop = Canvas.GetTop(thumbnail);
-                };
-
-                // Track drag end for undo
-                thumbnail.DragCompleted += (s, args) =>
-                {
-                    double newLeft = Canvas.GetLeft(thumbnail);
-                    double newTop = Canvas.GetTop(thumbnail);
-                    
-                    // Only add to undo stack if position actually changed
-                    if (Math.Abs(newLeft - originalLeft) > PositionChangeThreshold || 
-                        Math.Abs(newTop - originalTop) > PositionChangeThreshold)
-                    {
-                        var moveCommand = new MoveWindowCommand(thumbnail, originalLeft, originalTop, newLeft, newTop);
-                        _undoStack.Push(moveCommand);
-                        _redoStack.Clear();
-                    }
-                };
-
-                // Track resize start for undo
-                thumbnail.ResizeStarted += (s, args) =>
-                {
-                    originalWidth = thumbnail.Width;
-                    originalHeight = thumbnail.Height;
-                    originalLeft = Canvas.GetLeft(thumbnail);
-                    originalTop = Canvas.GetTop(thumbnail);
-                };
-
-                // Track resize end for undo
-                thumbnail.ResizeCompleted += (s, args) =>
-                {
-                    double newWidth = thumbnail.Width;
-                    double newHeight = thumbnail.Height;
-                    double newLeft = Canvas.GetLeft(thumbnail);
-                    double newTop = Canvas.GetTop(thumbnail);
-                    
-                    // Only add to undo stack if size or position actually changed
-                    if (Math.Abs(newWidth - originalWidth) > PositionChangeThreshold || 
-                        Math.Abs(newHeight - originalHeight) > PositionChangeThreshold ||
-                        Math.Abs(newLeft - originalLeft) > PositionChangeThreshold || 
-                        Math.Abs(newTop - originalTop) > PositionChangeThreshold)
-                    {
-                        var resizeCommand = new ResizeWindowCommand(thumbnail, 
-                            originalWidth, originalHeight, originalLeft, originalTop,
-                            newWidth, newHeight, newLeft, newTop);
-                        _undoStack.Push(resizeCommand);
-                        _redoStack.Clear();
-                    }
-                };
+                // Setup event handlers for the thumbnail
+                SetupThumbnailEventHandlers(thumbnail);
                 
                 // Execute add command
                 var addCommand = new AddWindowCommand(MainCanvas, thumbnail);
@@ -509,6 +443,80 @@ namespace InfiniteWin
                 MessageBox.Show($"Failed to add window thumbnail: {ex.Message}", 
                     "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
+        }
+
+        /// <summary>
+        /// Setup event handlers for a window thumbnail
+        /// Used when creating thumbnails and when undoing remove operations
+        /// </summary>
+        private void SetupThumbnailEventHandlers(WindowThumbnailControl thumbnail)
+        {
+            // Store original position for move tracking
+            double originalLeft = Canvas.GetLeft(thumbnail);
+            double originalTop = Canvas.GetTop(thumbnail);
+            double originalWidth = thumbnail.Width;
+            double originalHeight = thumbnail.Height;
+            
+            // Handle close event
+            thumbnail.CloseRequested += (s, args) =>
+            {
+                var removeCommand = new RemoveWindowCommand(MainCanvas, thumbnail, SetupThumbnailEventHandlers);
+                ExecuteCommand(removeCommand);
+            };
+
+            // Track drag start position for undo
+            thumbnail.DragStarted += (s, args) =>
+            {
+                originalLeft = Canvas.GetLeft(thumbnail);
+                originalTop = Canvas.GetTop(thumbnail);
+            };
+
+            // Track drag end for undo
+            thumbnail.DragCompleted += (s, args) =>
+            {
+                double newLeft = Canvas.GetLeft(thumbnail);
+                double newTop = Canvas.GetTop(thumbnail);
+                
+                // Only add to undo stack if position actually changed
+                if (Math.Abs(newLeft - originalLeft) > PositionChangeThreshold || 
+                    Math.Abs(newTop - originalTop) > PositionChangeThreshold)
+                {
+                    var moveCommand = new MoveWindowCommand(thumbnail, originalLeft, originalTop, newLeft, newTop);
+                    _undoStack.Push(moveCommand);
+                    _redoStack.Clear();
+                }
+            };
+
+            // Track resize start for undo
+            thumbnail.ResizeStarted += (s, args) =>
+            {
+                originalWidth = thumbnail.Width;
+                originalHeight = thumbnail.Height;
+                originalLeft = Canvas.GetLeft(thumbnail);
+                originalTop = Canvas.GetTop(thumbnail);
+            };
+
+            // Track resize end for undo
+            thumbnail.ResizeCompleted += (s, args) =>
+            {
+                double newWidth = thumbnail.Width;
+                double newHeight = thumbnail.Height;
+                double newLeft = Canvas.GetLeft(thumbnail);
+                double newTop = Canvas.GetTop(thumbnail);
+                
+                // Only add to undo stack if size or position actually changed
+                if (Math.Abs(newWidth - originalWidth) > PositionChangeThreshold || 
+                    Math.Abs(newHeight - originalHeight) > PositionChangeThreshold ||
+                    Math.Abs(newLeft - originalLeft) > PositionChangeThreshold || 
+                    Math.Abs(newTop - originalTop) > PositionChangeThreshold)
+                {
+                    var resizeCommand = new ResizeWindowCommand(thumbnail, 
+                        originalWidth, originalHeight, originalLeft, originalTop,
+                        newWidth, newHeight, newLeft, newTop);
+                    _undoStack.Push(resizeCommand);
+                    _redoStack.Clear();
+                }
+            };
         }
 
         /// <summary>

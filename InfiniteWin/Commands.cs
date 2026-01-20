@@ -51,9 +51,10 @@ namespace InfiniteWin
         private readonly double _top;
         private readonly double _width;
         private readonly double _height;
+        private readonly Action<WindowThumbnailControl> _setupEventHandlers;
         private bool _executed = false;
 
-        public RemoveWindowCommand(Canvas canvas, WindowThumbnailControl thumbnail)
+        public RemoveWindowCommand(Canvas canvas, WindowThumbnailControl thumbnail, Action<WindowThumbnailControl> setupEventHandlers)
         {
             _canvas = canvas;
             _thumbnail = thumbnail;
@@ -62,6 +63,7 @@ namespace InfiniteWin
             _top = Canvas.GetTop(thumbnail);
             _width = thumbnail.Width;
             _height = thumbnail.Height;
+            _setupEventHandlers = setupEventHandlers;
         }
 
         public void Execute()
@@ -84,6 +86,10 @@ namespace InfiniteWin
                 _thumbnail.Height = _height;
                 Canvas.SetLeft(_thumbnail, _left);
                 Canvas.SetTop(_thumbnail, _top);
+                
+                // Reconnect event handlers
+                _setupEventHandlers(_thumbnail);
+                
                 _canvas.Children.Add(_thumbnail);
                 _executed = false;
             }

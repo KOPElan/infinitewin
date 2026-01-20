@@ -107,6 +107,8 @@ namespace InfiniteWin
         private double _resizeStartHeight;
         private ResizeDirection _resizeDirection;
 
+        private const double MinimumThumbnailSize = 100;
+
         private enum ResizeDirection
         {
             None,
@@ -313,9 +315,8 @@ namespace InfiniteWin
                     }
 
                     // Enforce minimum size
-                    const double MinSize = 100;
-                    newWidth = Math.Max(MinSize, newWidth);
-                    newHeight = Math.Max(MinSize, newHeight);
+                    newWidth = Math.Max(MinimumThumbnailSize, newWidth);
+                    newHeight = Math.Max(MinimumThumbnailSize, newHeight);
 
                     Width = newWidth;
                     Height = newHeight;
