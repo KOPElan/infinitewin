@@ -21,6 +21,8 @@ namespace InfiniteWin
         // Minimum position change (in pixels) to trigger undo - prevents excessive undo entries 
         // during minor drag adjustments or float precision differences
         private const double PositionChangeThreshold = 0.1;
+        // Margin to leave around maximized thumbnail when zooming canvas
+        private const double SpacebarZoomMargin = 40;
 
         private Point _lastMousePosition;
         private bool _isPanning = false;
@@ -124,9 +126,8 @@ namespace InfiniteWin
                 if (double.IsNaN(thumbnailTop)) thumbnailTop = 0;
 
                 // Get the available window size (account for margins)
-                const double margin = 40; // Leave some margin
-                double availableWidth = RenderSize.Width - (margin * 2);
-                double availableHeight = RenderSize.Height - (margin * 2);
+                double availableWidth = RenderSize.Width - (SpacebarZoomMargin * 2);
+                double availableHeight = RenderSize.Height - (SpacebarZoomMargin * 2);
 
                 if (availableWidth <= 0 || availableHeight <= 0 || thumbnailWidth <= 0 || thumbnailHeight <= 0)
                     return;
@@ -169,7 +170,7 @@ namespace InfiniteWin
 
             // Update zoom display and thumbnails
             UpdateZoomDisplay();
-            Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
+            DeferredUpdateAllThumbnails();
         }
 
         /// <summary>
@@ -186,7 +187,7 @@ namespace InfiniteWin
                 _isCanvasZoomed = false;
                 
                 UpdateZoomDisplay();
-                Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
+                DeferredUpdateAllThumbnails();
             }
         }
 
@@ -257,7 +258,7 @@ namespace InfiniteWin
             UpdateZoomDisplay();
             
             // Update all thumbnails after zoom (deferred to allow layout update)
-            Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
+            DeferredUpdateAllThumbnails();
 
             e.Handled = true;
         }
@@ -294,7 +295,7 @@ namespace InfiniteWin
                 _lastMousePosition = currentPosition;
                 
                 // Update all thumbnails during pan (deferred to allow layout update)
-                Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
+                DeferredUpdateAllThumbnails();
                 
                 e.Handled = true;
             }
@@ -512,7 +513,7 @@ namespace InfiniteWin
             }
 
             // Update all thumbnails
-            Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
+            DeferredUpdateAllThumbnails();
         }
 
         /// <summary>
@@ -528,7 +529,7 @@ namespace InfiniteWin
             UpdateZoomDisplay();
             
             // Update all thumbnails after reset (deferred to allow layout update)
-            Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
+            DeferredUpdateAllThumbnails();
         }
 
         /// <summary>
@@ -698,6 +699,14 @@ namespace InfiniteWin
                     thumbnail.UpdateThumbnail();
                 }
             }
+        }
+
+        /// <summary>
+        /// Schedule a deferred update of all thumbnails using the dispatcher
+        /// </summary>
+        private void DeferredUpdateAllThumbnails()
+        {
+            DeferredUpdateAllThumbnails();
         }
 
         /// <summary>
