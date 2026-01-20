@@ -76,12 +76,15 @@ namespace InfiniteWin
         private const uint SWP_NOACTIVATE = 0x0010;
         private const uint SWP_SHOWWINDOW = 0x0040;
         private const uint SWP_FRAMECHANGED = 0x0020;
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOSIZE = 0x0001;
 
         #endregion
 
         private IntPtr _sourceWindow;
         private IntPtr _originalParent = IntPtr.Zero;
         private int _originalStyle = 0;
+        private bool _isEmbedded = false; // Track if window is successfully embedded
         private bool _disposed = false;
         
         private Point _dragStartPosition;
@@ -445,6 +448,7 @@ namespace InfiniteWin
             try
             {
                 // Save original parent before modifying it
+                // Note: GetParent returns IntPtr.Zero for top-level windows (desktop parent)
                 _originalParent = GetParent(_sourceWindow);
                 
                 // Save original window style
@@ -460,26 +464,42 @@ namespace InfiniteWin
                 // Set our application window as the parent
                 SetParent(_sourceWindow, hostHandle);
 
-                // Modify window style to make it a child window
-                // Remove window decorations (caption, thick frame, system menu)
-                int style = _originalStyle;
-                style &= ~WS_CAPTION;
-                style &= ~WS_THICKFRAME;
-                style &= ~WS_MINIMIZE;
-                style &= ~WS_MAXIMIZE;
-                style &= ~WS_SYSMENU;
-                style |= WS_CHILD;
-                style |= WS_VISIBLE;
-
-                SetWindowLong(_sourceWindow, GWL_STYLE, style);
+                // Calculate and apply child window style
+                int childStyle = CalculateEmbedStyle(_originalStyle);
+                SetWindowLong(_sourceWindow, GWL_STYLE, childStyle);
 
                 // Position and size the embedded window
                 UpdateEmbeddedWindowSize();
+                
+                // Mark as successfully embedded
+                _isEmbedded = true;
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Failed to embed window: {ex.Message}");
+                _isEmbedded = false;
             }
+        }
+
+        /// <summary>
+        /// Calculate the window style for embedding (remove decorations, add child flags)
+        /// </summary>
+        private int CalculateEmbedStyle(int originalStyle)
+        {
+            int style = originalStyle;
+            
+            // Remove window decorations
+            style &= ~WS_CAPTION;
+            style &= ~WS_THICKFRAME;
+            style &= ~WS_MINIMIZE;
+            style &= ~WS_MAXIMIZE;
+            style &= ~WS_SYSMENU;
+            
+            // Add child window flags
+            style |= WS_CHILD;
+            style |= WS_VISIBLE;
+            
+            return style;
         }
 
         /// <summary>
@@ -490,20 +510,24 @@ namespace InfiniteWin
             if (_sourceWindow == IntPtr.Zero || !IsWindow(_sourceWindow))
                 return;
 
+            // Only restore if we actually embedded the window
+            if (!_isEmbedded)
+                return;
+
             try
             {
                 // Restore original window style
-                if (_originalStyle != 0)
-                {
-                    SetWindowLong(_sourceWindow, GWL_STYLE, _originalStyle);
-                }
+                SetWindowLong(_sourceWindow, GWL_STYLE, _originalStyle);
 
                 // Restore original parent
+                // If _originalParent is IntPtr.Zero, this restores to desktop (for top-level windows)
                 SetParent(_sourceWindow, _originalParent);
 
-                // Force window to update its frame
+                // Force window to update its frame (don't move or resize)
                 SetWindowPos(_sourceWindow, IntPtr.Zero, 0, 0, 0, 0,
-                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+                
+                _isEmbedded = false;
             }
             catch (Exception ex)
             {
