@@ -104,8 +104,8 @@ namespace InfiniteWin
 
         private const double DefaultWidth = 400;
         private const double DefaultHeight = 300;
-        private const double MaxInitialWidth = 600;
-        private const double MaxInitialHeight = 400;
+        private const double MaxInitialWidth = 800;  // Increased for better resolution
+        private const double MaxInitialHeight = 600; // Increased for better resolution
 
         public WindowThumbnailControl(IntPtr sourceWindow)
         {
@@ -203,47 +203,88 @@ namespace InfiniteWin
                 int sourceWidth = rect.Width;
                 int sourceHeight = rect.Height;
                 
-                if (sourceWidth > 0 && sourceHeight > 0)
+                // Check if window appears to be minimized (very small dimensions)
+                // Minimized windows typically have very small sizes on taskbar
+                bool likelyMinimized = sourceWidth < 50 || sourceHeight < 50;
+                
+                if (sourceWidth > 0 && sourceHeight > 0 && !likelyMinimized)
                 {
-                    // Calculate aspect ratio
-                    double aspectRatio = (double)sourceWidth / sourceHeight;
-                    
-                    // Start with a target width, constrain to max
-                    double targetWidth = Math.Min(DefaultWidth, MaxInitialWidth);
-                    double targetHeight = targetWidth / aspectRatio;
-                    
-                    // If height exceeds max, scale down based on height instead
-                    if (targetHeight > MaxInitialHeight)
-                    {
-                        targetHeight = MaxInitialHeight;
-                        targetWidth = targetHeight * aspectRatio;
-                    }
-                    
-                    // Ensure minimum size (at least 200px on the smaller dimension)
-                    const double MinDimension = 200;
-                    if (targetWidth < MinDimension && targetHeight < MinDimension)
-                    {
-                        if (aspectRatio >= 1.0)
-                        {
-                            targetWidth = MinDimension;
-                            targetHeight = MinDimension / aspectRatio;
-                        }
-                        else
-                        {
-                            targetHeight = MinDimension;
-                            targetWidth = MinDimension * aspectRatio;
-                        }
-                    }
-                    
-                    Width = targetWidth;
-                    Height = targetHeight;
+                    CalculateAndSetSize(sourceWidth, sourceHeight);
                     return;
                 }
             }
             
-            // Fallback to default size if we can't get window dimensions
+            // Fallback to default size if we can't get window dimensions or window is minimized
             Width = DefaultWidth;
             Height = DefaultHeight;
+        }
+
+        /// <summary>
+        /// Update size based on DWM thumbnail source size (called after thumbnail registration)
+        /// This provides accurate dimensions even for minimized windows
+        /// </summary>
+        private void UpdateSizeFromThumbnail()
+        {
+            if (_thumbnail == IntPtr.Zero)
+                return;
+
+            try
+            {
+                int result = DwmQueryThumbnailSourceSize(_thumbnail, out SIZE size);
+                if (result == 0 && size.cx > 0 && size.cy > 0)
+                {
+                    CalculateAndSetSize(size.cx, size.cy);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to query thumbnail size: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Calculate thumbnail size maintaining aspect ratio with size constraints
+        /// </summary>
+        private void CalculateAndSetSize(int sourceWidth, int sourceHeight)
+        {
+            // Calculate aspect ratio
+            double aspectRatio = (double)sourceWidth / sourceHeight;
+            
+            // Clamp aspect ratio to reasonable bounds to avoid extremely distorted thumbnails
+            // This handles edge cases like extremely wide or tall windows
+            const double MinAspectRatio = 0.2;  // 1:5 (very tall)
+            const double MaxAspectRatio = 5.0;  // 5:1 (very wide)
+            aspectRatio = Math.Max(MinAspectRatio, Math.Min(MaxAspectRatio, aspectRatio));
+            
+            // Start with a target width, constrain to max
+            double targetWidth = Math.Min(DefaultWidth, MaxInitialWidth);
+            double targetHeight = targetWidth / aspectRatio;
+            
+            // If height exceeds max, scale down based on height instead
+            if (targetHeight > MaxInitialHeight)
+            {
+                targetHeight = MaxInitialHeight;
+                targetWidth = targetHeight * aspectRatio;
+            }
+            
+            // Ensure minimum size (at least 200px on the smaller dimension)
+            const double MinDimension = 200;
+            if (targetWidth < MinDimension && targetHeight < MinDimension)
+            {
+                if (aspectRatio >= 1.0)
+                {
+                    targetWidth = MinDimension;
+                    targetHeight = MinDimension / aspectRatio;
+                }
+                else
+                {
+                    targetHeight = MinDimension;
+                    targetWidth = MinDimension * aspectRatio;
+                }
+            }
+            
+            Width = targetWidth;
+            Height = targetHeight;
         }
 
         private void OnLoaded(object sender, RoutedEventArgs e)
@@ -275,6 +316,8 @@ namespace InfiniteWin
                 int result = DwmRegisterThumbnail(_hostHandle, _sourceWindow, out _thumbnail);
                 if (result == 0 && _thumbnail != IntPtr.Zero)
                 {
+                    // Now that thumbnail is registered, update size based on actual content
+                    UpdateSizeFromThumbnail();
                     UpdateThumbnail();
                 }
             }
