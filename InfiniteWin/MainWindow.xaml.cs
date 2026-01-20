@@ -569,6 +569,189 @@ namespace InfiniteWin
         }
 
         /// <summary>
+        /// Toggle between thumbnail mode and embed mode for a window
+        /// </summary>
+        private void ToggleWindowMode(WindowThumbnailControl thumbnail)
+        {
+            try
+            {
+                // Get the current position and size
+                double left = Canvas.GetLeft(thumbnail);
+                double top = Canvas.GetTop(thumbnail);
+                double width = thumbnail.Width;
+                double height = thumbnail.Height;
+                IntPtr sourceWindow = thumbnail.SourceWindow;
+
+                // Remove the thumbnail
+                thumbnail.Dispose();
+                MainCanvas.Children.Remove(thumbnail);
+
+                // Create embed control with same window
+                var embedControl = new WindowEmbedControl(sourceWindow);
+                
+                // Set the same position and size
+                Canvas.SetLeft(embedControl, left);
+                Canvas.SetTop(embedControl, top);
+                embedControl.Width = width;
+                embedControl.Height = height;
+
+                // Setup event handlers
+                SetupEmbedEventHandlers(embedControl);
+
+                // Add to canvas
+                MainCanvas.Children.Add(embedControl);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to toggle window mode: {ex.Message}", 
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Toggle from embed mode back to thumbnail mode for a window
+        /// </summary>
+        private void ToggleEmbedMode(WindowEmbedControl embedControl)
+        {
+            try
+            {
+                // Get the current position and size
+                double left = Canvas.GetLeft(embedControl);
+                double top = Canvas.GetTop(embedControl);
+                double width = embedControl.Width;
+                double height = embedControl.Height;
+                IntPtr sourceWindow = embedControl.SourceWindow;
+
+                // Remove the embed control
+                embedControl.Dispose();
+                MainCanvas.Children.Remove(embedControl);
+
+                // Create thumbnail control with same window
+                var thumbnail = new WindowThumbnailControl(sourceWindow);
+                
+                // Set the same position and size
+                Canvas.SetLeft(thumbnail, left);
+                Canvas.SetTop(thumbnail, top);
+                thumbnail.Width = width;
+                thumbnail.Height = height;
+
+                // Setup event handlers
+                SetupThumbnailEventHandlers(thumbnail);
+
+                // Add to canvas
+                MainCanvas.Children.Add(thumbnail);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to toggle embed mode: {ex.Message}", 
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Setup event handlers for an embedded window control
+        /// Similar to SetupThumbnailEventHandlers but for WindowEmbedControl
+        /// </summary>
+        private void SetupEmbedEventHandlers(WindowEmbedControl embedControl)
+        {
+            // Store original position for move tracking
+            double originalLeft = Canvas.GetLeft(embedControl);
+            double originalTop = Canvas.GetTop(embedControl);
+            double originalWidth = embedControl.Width;
+            double originalHeight = embedControl.Height;
+            
+            // Handle selection changes
+            embedControl.SelectionChanged += (s, args) =>
+            {
+                // When this embed is selected, deselect all others
+                if (embedControl.IsSelected)
+                {
+                    foreach (UIElement child in MainCanvas.Children)
+                    {
+                        if (child is WindowThumbnailControl otherThumbnail)
+                        {
+                            otherThumbnail.IsSelected = false;
+                        }
+                        else if (child is WindowEmbedControl otherEmbed && otherEmbed != embedControl)
+                        {
+                            otherEmbed.IsSelected = false;
+                        }
+                    }
+                    
+                    // Clear _selectedThumbnail when selecting embed control
+                    if (_isCanvasZoomed)
+                    {
+                        RestoreCanvasZoom();
+                    }
+                    _selectedThumbnail = null;
+                }
+            };
+            
+            // Handle close event
+            embedControl.CloseRequested += (s, args) =>
+            {
+                embedControl.Dispose();
+                MainCanvas.Children.Remove(embedControl);
+            };
+
+            // Handle mode toggle event (switch back to thumbnail)
+            embedControl.ModeToggleRequested += (s, args) =>
+            {
+                ToggleEmbedMode(embedControl);
+            };
+
+            // Track drag start position for undo
+            embedControl.DragStarted += (s, args) =>
+            {
+                originalLeft = Canvas.GetLeft(embedControl);
+                originalTop = Canvas.GetTop(embedControl);
+            };
+
+            // Track drag end for undo
+            embedControl.DragCompleted += (s, args) =>
+            {
+                double newLeft = Canvas.GetLeft(embedControl);
+                double newTop = Canvas.GetTop(embedControl);
+                
+                // Only add to undo stack if position actually changed
+                if (Math.Abs(newLeft - originalLeft) > PositionChangeThreshold || 
+                    Math.Abs(newTop - originalTop) > PositionChangeThreshold)
+                {
+                    // Note: We would need to create embed-specific commands or make existing commands generic
+                    // For now, we skip undo for embedded windows
+                }
+            };
+
+            // Track resize start for undo
+            embedControl.ResizeStarted += (s, args) =>
+            {
+                originalWidth = embedControl.Width;
+                originalHeight = embedControl.Height;
+                originalLeft = Canvas.GetLeft(embedControl);
+                originalTop = Canvas.GetTop(embedControl);
+            };
+
+            // Track resize end for undo
+            embedControl.ResizeCompleted += (s, args) =>
+            {
+                double newWidth = embedControl.Width;
+                double newHeight = embedControl.Height;
+                double newLeft = Canvas.GetLeft(embedControl);
+                double newTop = Canvas.GetTop(embedControl);
+                
+                // Only add to undo stack if size or position actually changed
+                if (Math.Abs(newWidth - originalWidth) > PositionChangeThreshold || 
+                    Math.Abs(newHeight - originalHeight) > PositionChangeThreshold ||
+                    Math.Abs(newLeft - originalLeft) > PositionChangeThreshold || 
+                    Math.Abs(newTop - originalTop) > PositionChangeThreshold)
+                {
+                    // Note: We would need to create embed-specific commands or make existing commands generic
+                    // For now, we skip undo for embedded windows
+                }
+            };
+        }
+
+        /// <summary>
         /// Setup event handlers for a window thumbnail
         /// Used when creating thumbnails and when undoing remove operations
         /// </summary>
@@ -631,6 +814,12 @@ namespace InfiniteWin
                 
                 var removeCommand = new RemoveWindowCommand(MainCanvas, thumbnail, SetupThumbnailEventHandlers);
                 ExecuteCommand(removeCommand);
+            };
+
+            // Handle mode toggle event (switch between thumbnail and embed)
+            thumbnail.ModeToggleRequested += (s, args) =>
+            {
+                ToggleWindowMode(thumbnail);
             };
 
             // Track drag start position for undo
