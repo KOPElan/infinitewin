@@ -233,8 +233,8 @@ namespace InfiniteWin
         /// </summary>
         private void Canvas_MouseWheel(object sender, MouseWheelEventArgs e)
         {
-            // Get mouse position relative to canvas
-            Point mousePos = e.GetPosition(MainCanvas);
+            // Get mouse position relative to the window (parent coordinate space)
+            Point mousePos = e.GetPosition(this);
 
             // Calculate zoom factor
             double zoomFactor = e.Delta > 0 ? (1 + ZoomSpeed) : (1 - ZoomSpeed);
@@ -243,10 +243,13 @@ namespace InfiniteWin
             // Clamp zoom level
             newScale = Math.Max(MinZoom, Math.Min(MaxZoom, newScale));
 
-            // Calculate the adjustment needed to keep zoom centered on mouse
+            // Calculate the actual scale change that will be applied
             double scaleChange = newScale / CanvasScaleTransform.ScaleX;
             
-            // Adjust translation to zoom towards mouse position
+            // Adjust translation to keep the point under the mouse fixed
+            // The point under mouse in canvas coordinates is: (mousePos - translate) / scale
+            // After zoom, we want: (mousePos - newTranslate) / newScale = (mousePos - translate) / scale
+            // Solving for newTranslate: newTranslate = mousePos - (mousePos - translate) * scaleChange
             CanvasTranslateTransform.X = mousePos.X - (mousePos.X - CanvasTranslateTransform.X) * scaleChange;
             CanvasTranslateTransform.Y = mousePos.Y - (mousePos.Y - CanvasTranslateTransform.Y) * scaleChange;
 
