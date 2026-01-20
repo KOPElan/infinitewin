@@ -461,12 +461,16 @@ namespace InfiniteWin
 
                 var hostHandle = new WindowInteropHelper(window).Handle;
                 
+                // Calculate and apply child window style first (before changing parent)
+                int childStyle = CalculateEmbedStyle(_originalStyle);
+                SetWindowLong(_sourceWindow, GWL_STYLE, childStyle);
+                
                 // Set our application window as the parent
                 SetParent(_sourceWindow, hostHandle);
 
-                // Calculate and apply child window style
-                int childStyle = CalculateEmbedStyle(_originalStyle);
-                SetWindowLong(_sourceWindow, GWL_STYLE, childStyle);
+                // Force window frame to update to reflect style changes
+                SetWindowPos(_sourceWindow, IntPtr.Zero, 0, 0, 0, 0,
+                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
 
                 // Position and size the embedded window
                 UpdateEmbeddedWindowSize();

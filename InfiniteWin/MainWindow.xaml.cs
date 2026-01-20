@@ -586,6 +586,14 @@ namespace InfiniteWin
                 thumbnail.Dispose();
                 MainCanvas.Children.Remove(thumbnail);
 
+                // Validate that the window is still valid before embedding
+                if (!WindowEmbedControl.IsWindowValid(sourceWindow))
+                {
+                    MessageBox.Show("The window is no longer available.", 
+                        "Window Not Available", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
                 // Create embed control with same window
                 var embedControl = new WindowEmbedControl(sourceWindow);
                 
@@ -625,6 +633,14 @@ namespace InfiniteWin
                 // Remove the embed control
                 embedControl.Dispose();
                 MainCanvas.Children.Remove(embedControl);
+
+                // Validate that the window is still valid before creating thumbnail
+                if (!WindowThumbnailControl.IsWindowValid(sourceWindow))
+                {
+                    MessageBox.Show("The window is no longer available.", 
+                        "Window Not Available", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
 
                 // Create thumbnail control with same window
                 var thumbnail = new WindowThumbnailControl(sourceWindow);
