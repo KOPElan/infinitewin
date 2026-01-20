@@ -46,8 +46,8 @@ namespace InfiniteWin
             InitializeComponent();
             
             // Attach event handlers for canvas interaction
-            // MouseWheel is attached to the Window so it works everywhere, not just on the canvas
-            this.MouseWheel += Canvas_MouseWheel;
+            // MouseWheel is attached to the Window to capture wheel events anywhere in the application, not just on the canvas
+            this.MouseWheel += Window_MouseWheel;
             MainCanvas.MouseDown += Canvas_MouseDown;
             MainCanvas.MouseMove += Canvas_MouseMove;
             MainCanvas.MouseUp += Canvas_MouseUp;
@@ -124,6 +124,8 @@ namespace InfiniteWin
                 // Handle NaN values
                 if (double.IsNaN(thumbnailLeft)) thumbnailLeft = 0;
                 if (double.IsNaN(thumbnailTop)) thumbnailTop = 0;
+                if (double.IsNaN(thumbnailWidth)) thumbnailWidth = 100;
+                if (double.IsNaN(thumbnailHeight)) thumbnailHeight = 100;
 
                 // Get the available window size (account for margins)
                 double availableWidth = RenderSize.Width - (SpacebarZoomMargin * 2);
@@ -231,7 +233,7 @@ namespace InfiniteWin
         /// Handle mouse wheel for zooming
         /// Zoom is centered on mouse position
         /// </summary>
-        private void Canvas_MouseWheel(object sender, MouseWheelEventArgs e)
+        private void Window_MouseWheel(object sender, MouseWheelEventArgs e)
         {
             // Get mouse position relative to the window coordinate space
             Point mousePos = e.GetPosition(this);

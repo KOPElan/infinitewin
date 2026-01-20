@@ -599,6 +599,9 @@ namespace InfiniteWin
                     // Remove and re-add to move to end (rendered last = on top)
                     panel.Children.RemoveAt(index);
                     panel.Children.Add(this);
+                    
+                    // Ensure DWM thumbnail z-order/properties are updated after reordering
+                    UpdateThumbnail();
                 }
             }
         }
@@ -780,6 +783,16 @@ namespace InfiniteWin
                 if (_isDragging)
                 {
                     _isDragging = false;
+                    if (IsMouseCaptured)
+                    {
+                        ReleaseMouseCapture();
+                    }
+                }
+                
+                // Stop resizing if currently resizing
+                if (_isResizing)
+                {
+                    _isResizing = false;
                 }
                 
                 UnregisterThumbnail();
