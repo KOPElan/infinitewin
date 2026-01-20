@@ -108,6 +108,7 @@ namespace InfiniteWin
         private ResizeDirection _resizeDirection;
 
         private const double MinimumThumbnailSize = 100;
+        private const int DragZIndex = 1000; // Z-index for dragged element to appear on top
 
         private enum ResizeDirection
         {
@@ -576,7 +577,7 @@ namespace InfiniteWin
             CaptureMouse();
             
             // Bring to front during drag by setting high ZIndex
-            Panel.SetZIndex(this, 1000);
+            Panel.SetZIndex(this, DragZIndex);
             
             // Notify drag started
             DragStarted?.Invoke(this, EventArgs.Empty);
@@ -760,6 +761,13 @@ namespace InfiniteWin
         {
             if (!_disposed)
             {
+                // Reset z-index if currently dragging
+                if (_isDragging)
+                {
+                    Panel.SetZIndex(this, 0);
+                    _isDragging = false;
+                }
+                
                 UnregisterThumbnail();
                 _disposed = true;
             }
