@@ -636,15 +636,6 @@ namespace InfiniteWin
             {
                 originalLeft = Canvas.GetLeft(thumbnail);
                 originalTop = Canvas.GetTop(thumbnail);
-                
-                // Hide DWM thumbnails of other windows during drag to prevent z-order issues
-                foreach (UIElement child in MainCanvas.Children)
-                {
-                    if (child is WindowThumbnailControl otherThumbnail && otherThumbnail != thumbnail)
-                    {
-                        otherThumbnail.SetThumbnailVisibility(false);
-                    }
-                }
             };
 
             // Track drag end for undo
@@ -652,15 +643,6 @@ namespace InfiniteWin
             {
                 double newLeft = Canvas.GetLeft(thumbnail);
                 double newTop = Canvas.GetTop(thumbnail);
-                
-                // Restore DWM thumbnails of other windows after drag
-                foreach (UIElement child in MainCanvas.Children)
-                {
-                    if (child is WindowThumbnailControl otherThumbnail && otherThumbnail != thumbnail)
-                    {
-                        otherThumbnail.SetThumbnailVisibility(true);
-                    }
-                }
                 
                 // Only add to undo stack if position actually changed
                 if (Math.Abs(newLeft - originalLeft) > PositionChangeThreshold || 

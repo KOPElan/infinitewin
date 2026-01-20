@@ -1,6 +1,5 @@
 using System;
 using System.Runtime.InteropServices;
-using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -93,7 +92,6 @@ namespace InfiniteWin
         
         private Point _dragStartPosition;
         private bool _isDragging = false;
-        private int _baseZIndex = 0; // Base z-index when not dragging
         
         private DateTime _lastClickTime = DateTime.MinValue;
         private const int DoubleClickMilliseconds = 500;
@@ -110,10 +108,6 @@ namespace InfiniteWin
         private ResizeDirection _resizeDirection;
 
         private const double MinimumThumbnailSize = 100;
-        private const int DragZIndexOffset = 10000; // Offset added during drag to appear on top
-        
-        // Static counter for z-index ordering (shared across all instances)
-        private static int _nextZIndex = 1;
 
         private enum ResizeDirection
         {
@@ -604,9 +598,9 @@ namespace InfiniteWin
             if (e.OriginalSource is Button || _isResizing)
                 return;
 
-            // Bring to front when clicked - increment counter atomically and assign new z-index
-            _baseZIndex = Interlocked.Increment(ref _nextZIndex);
-            Panel.SetZIndex(this, _baseZIndex);
+            // Bring to front by reordering in parent Canvas
+            // This ensures both WPF elements and DWM thumbnails appear in correct order
+            BringToFront();
 
             // Select this thumbnail on click
             IsSelected = true;
@@ -627,13 +621,28 @@ namespace InfiniteWin
             _dragStartPosition = e.GetPosition(Parent as UIElement);
             CaptureMouse();
             
-            // During drag, add offset to appear on top of all windows
-            Panel.SetZIndex(this, _baseZIndex + DragZIndexOffset);
-            
             // Notify drag started
             DragStarted?.Invoke(this, EventArgs.Empty);
             
             e.Handled = true;
+        }
+
+        /// <summary>
+        /// Bring this window to the front by moving it to the end of parent's children collection
+        /// This ensures both WPF rendering and DWM thumbnail overlay order are correct
+        /// </summary>
+        private void BringToFront()
+        {
+            if (Parent is Panel panel)
+            {
+                var index = panel.Children.IndexOf(this);
+                if (index >= 0 && index < panel.Children.Count - 1)
+                {
+                    // Remove and re-add to move to end (rendered last = on top)
+                    panel.Children.RemoveAt(index);
+                    panel.Children.Add(this);
+                }
+            }
         }
 
         private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -642,9 +651,6 @@ namespace InfiniteWin
             {
                 _isDragging = false;
                 ReleaseMouseCapture();
-                
-                // Restore base ZIndex after drag (keep it at front, don't reset to 0)
-                Panel.SetZIndex(this, _baseZIndex);
                 
                 // Notify drag completed
                 DragCompleted?.Invoke(this, EventArgs.Empty);
@@ -812,10 +818,9 @@ namespace InfiniteWin
         {
             if (!_disposed)
             {
-                // Restore base z-index if currently dragging
+                // Stop dragging if currently dragging
                 if (_isDragging)
                 {
-                    Panel.SetZIndex(this, _baseZIndex);
                     _isDragging = false;
                 }
                 
