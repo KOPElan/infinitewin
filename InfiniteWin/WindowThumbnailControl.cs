@@ -641,7 +641,6 @@ namespace InfiniteWin
         /// </summary>
         private void UpdateSelectionVisual()
         {
-            // Force update by setting properties directly
             if (_isSelected)
             {
                 // Show selection with a brighter border
