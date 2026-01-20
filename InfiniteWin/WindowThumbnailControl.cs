@@ -100,7 +100,62 @@ namespace InfiniteWin
         private TextBlock _titleText;
         private Border _hostBorder;
 
+        // Resize handling
+        private bool _isResizing = false;
+        private Point _resizeStartPosition;
+        private double _resizeStartWidth;
+        private double _resizeStartHeight;
+        private ResizeDirection _resizeDirection;
+
+        private const double MinimumThumbnailSize = 100;
+
+        private enum ResizeDirection
+        {
+            None,
+            BottomRight,
+            BottomLeft,
+            TopRight,
+            TopLeft,
+            Right,
+            Left,
+            Bottom,
+            Top
+        }
+
         public event EventHandler? CloseRequested;
+        public event EventHandler? DragStarted;
+        public event EventHandler? DragCompleted;
+        public event EventHandler? ResizeStarted;
+        public event EventHandler? ResizeCompleted;
+
+        // Public properties for layout save/load
+        public IntPtr SourceWindow => _sourceWindow;
+        public string WindowTitle { get; private set; } = string.Empty;
+
+        // Selection and maximize state
+        private bool _isSelected = false;
+        private bool _isMaximized = false;
+        private double _savedLeft;
+        private double _savedTop;
+        private double _savedWidth;
+        private double _savedHeight;
+
+        // Selection changed event
+        public event EventHandler? SelectionChanged;
+
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                if (_isSelected != value)
+                {
+                    _isSelected = value;
+                    UpdateSelectionVisual();
+                    SelectionChanged?.Invoke(this, EventArgs.Empty);
+                }
+            }
+        }
 
         private const double DefaultWidth = 400;
         private const double DefaultHeight = 300;
@@ -110,6 +165,7 @@ namespace InfiniteWin
         public WindowThumbnailControl(IntPtr sourceWindow)
         {
             _sourceWindow = sourceWindow;
+            WindowTitle = GetWindowTitle(_sourceWindow);
             
             // Set up border style
             BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x64, 0x96, 0xFF)); // #6496FF
@@ -144,7 +200,7 @@ namespace InfiniteWin
             // Window title
             _titleText = new TextBlock
             {
-                Text = GetWindowTitle(_sourceWindow),
+                Text = WindowTitle,
                 Foreground = Brushes.White,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0),
@@ -173,6 +229,13 @@ namespace InfiniteWin
             titleGrid.Children.Add(_closeButton);
 
             grid.Children.Add(titleBar);
+
+            // Add resize handles (corners)
+            AddResizeHandle(grid, HorizontalAlignment.Right, VerticalAlignment.Bottom, Cursors.SizeNWSE, ResizeDirection.BottomRight);
+            AddResizeHandle(grid, HorizontalAlignment.Left, VerticalAlignment.Bottom, Cursors.SizeNESW, ResizeDirection.BottomLeft);
+            AddResizeHandle(grid, HorizontalAlignment.Right, VerticalAlignment.Top, Cursors.SizeNESW, ResizeDirection.TopRight);
+            AddResizeHandle(grid, HorizontalAlignment.Left, VerticalAlignment.Top, Cursors.SizeNWSE, ResizeDirection.TopLeft);
+
             Child = grid;
 
             // Set initial size based on source window
@@ -193,6 +256,102 @@ namespace InfiniteWin
             GetWindowText(hwnd, sb, 256);
             string title = sb.ToString();
             return string.IsNullOrEmpty(title) ? "Untitled Window" : title;
+        }
+
+        /// <summary>
+        /// Add a resize handle to the control
+        /// </summary>
+        private void AddResizeHandle(Grid grid, HorizontalAlignment hAlign, VerticalAlignment vAlign, 
+            Cursor cursor, ResizeDirection direction)
+        {
+            var handle = new Border
+            {
+                Width = 12,
+                Height = 12,
+                Background = new SolidColorBrush(Color.FromArgb(0x80, 0x64, 0x96, 0xFF)),
+                HorizontalAlignment = hAlign,
+                VerticalAlignment = vAlign,
+                Cursor = cursor,
+                Margin = new Thickness(2),
+                CornerRadius = new CornerRadius(2)
+            };
+
+            handle.MouseLeftButtonDown += (s, e) =>
+            {
+                _isResizing = true;
+                _resizeDirection = direction;
+                _resizeStartPosition = e.GetPosition(Parent as UIElement);
+                _resizeStartWidth = Width;
+                _resizeStartHeight = Height;
+                handle.CaptureMouse();
+                ResizeStarted?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
+            };
+
+            handle.MouseLeftButtonUp += (s, e) =>
+            {
+                if (_isResizing)
+                {
+                    _isResizing = false;
+                    handle.ReleaseMouseCapture();
+                    ResizeCompleted?.Invoke(this, EventArgs.Empty);
+                    e.Handled = true;
+                }
+            };
+
+            handle.MouseMove += (s, e) =>
+            {
+                if (_isResizing && Parent is Canvas canvas)
+                {
+                    Point currentPosition = e.GetPosition(canvas);
+                    Vector delta = currentPosition - _resizeStartPosition;
+
+                    double newWidth = _resizeStartWidth;
+                    double newHeight = _resizeStartHeight;
+                    double left = Canvas.GetLeft(this);
+                    double top = Canvas.GetTop(this);
+
+                    if (double.IsNaN(left)) left = 0;
+                    if (double.IsNaN(top)) top = 0;
+
+                    // Calculate new size based on resize direction
+                    switch (_resizeDirection)
+                    {
+                        case ResizeDirection.BottomRight:
+                            newWidth = _resizeStartWidth + delta.X;
+                            newHeight = _resizeStartHeight + delta.Y;
+                            break;
+                        case ResizeDirection.BottomLeft:
+                            newWidth = _resizeStartWidth - delta.X;
+                            newHeight = _resizeStartHeight + delta.Y;
+                            Canvas.SetLeft(this, left + delta.X);
+                            break;
+                        case ResizeDirection.TopRight:
+                            newWidth = _resizeStartWidth + delta.X;
+                            newHeight = _resizeStartHeight - delta.Y;
+                            Canvas.SetTop(this, top + delta.Y);
+                            break;
+                        case ResizeDirection.TopLeft:
+                            newWidth = _resizeStartWidth - delta.X;
+                            newHeight = _resizeStartHeight - delta.Y;
+                            Canvas.SetLeft(this, left + delta.X);
+                            Canvas.SetTop(this, top + delta.Y);
+                            break;
+                    }
+
+                    // Enforce minimum size
+                    newWidth = Math.Max(MinimumThumbnailSize, newWidth);
+                    newHeight = Math.Max(MinimumThumbnailSize, newHeight);
+
+                    Width = newWidth;
+                    Height = newHeight;
+
+                    UpdateThumbnail();
+                    e.Handled = true;
+                }
+            };
+
+            grid.Children.Add(handle);
         }
 
         private void SetInitialSize()
@@ -393,9 +552,12 @@ namespace InfiniteWin
 
         private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            // Don't start drag if clicking close button
-            if (e.OriginalSource is Button)
+            // Don't start drag if clicking close button or already resizing
+            if (e.OriginalSource is Button || _isResizing)
                 return;
+
+            // Select this thumbnail on click
+            IsSelected = true;
 
             // Check for double-click
             DateTime now = DateTime.Now;
@@ -412,6 +574,10 @@ namespace InfiniteWin
             _isDragging = true;
             _dragStartPosition = e.GetPosition(Parent as UIElement);
             CaptureMouse();
+            
+            // Notify drag started
+            DragStarted?.Invoke(this, EventArgs.Empty);
+            
             e.Handled = true;
         }
 
@@ -421,6 +587,10 @@ namespace InfiniteWin
             {
                 _isDragging = false;
                 ReleaseMouseCapture();
+                
+                // Notify drag completed
+                DragCompleted?.Invoke(this, EventArgs.Empty);
+                
                 e.Handled = true;
             }
         }
@@ -464,6 +634,120 @@ namespace InfiniteWin
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             CloseRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Update visual appearance based on selection state
+        /// </summary>
+        private void UpdateSelectionVisual()
+        {
+            if (_isSelected)
+            {
+                // Show selection with a brighter border
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xD7, 0x00)); // Gold
+                BorderThickness = new Thickness(3);
+            }
+            else
+            {
+                // Normal border
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x64, 0x96, 0xFF)); // #6496FF
+                BorderThickness = new Thickness(2);
+            }
+            
+            // Force visual update
+            InvalidateVisual();
+        }
+
+        /// <summary>
+        /// Toggle between maximized (filling parent window) and normal size
+        /// </summary>
+        public void ToggleMaximize(double parentWidth, double parentHeight)
+        {
+            // Validate parent dimensions
+            if (parentWidth <= 0 || parentHeight <= 0)
+            {
+                System.Diagnostics.Debug.WriteLine("Cannot maximize: invalid parent dimensions");
+                return;
+            }
+
+            if (Parent is Canvas canvas)
+            {
+                if (!_isMaximized)
+                {
+                    // Save current state
+                    double currentLeft = Canvas.GetLeft(this);
+                    double currentTop = Canvas.GetTop(this);
+                    
+                    // Handle NaN values (not yet positioned)
+                    _savedLeft = double.IsNaN(currentLeft) ? 0 : currentLeft;
+                    _savedTop = double.IsNaN(currentTop) ? 0 : currentTop;
+                    _savedWidth = Width;
+                    _savedHeight = Height;
+
+                    // Validate saved dimensions
+                    if (_savedWidth <= 0 || _savedHeight <= 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Cannot maximize: invalid saved dimensions");
+                        return;
+                    }
+
+                    // Maximize to fill parent while preserving aspect ratio
+                    const double margin = 20;
+                    double availableWidth = parentWidth - (margin * 2);
+                    double availableHeight = parentHeight - (margin * 2);
+                    
+                    // Calculate current aspect ratio
+                    double aspectRatio = _savedWidth / _savedHeight;
+                    
+                    // Calculate dimensions that fit within available space while preserving aspect ratio
+                    double newWidth, newHeight;
+                    
+                    // Determine which dimension to fill (the longer edge)
+                    if (availableWidth / availableHeight > aspectRatio)
+                    {
+                        // Height is the limiting factor - fill height
+                        newHeight = availableHeight;
+                        newWidth = newHeight * aspectRatio;
+                    }
+                    else
+                    {
+                        // Width is the limiting factor - fill width
+                        newWidth = availableWidth;
+                        newHeight = newWidth / aspectRatio;
+                    }
+                    
+                    // Center the thumbnail in the available space
+                    double left = margin + (availableWidth - newWidth) / 2;
+                    double top = margin + (availableHeight - newHeight) / 2;
+                    
+                    Canvas.SetLeft(this, left);
+                    Canvas.SetTop(this, top);
+                    Width = newWidth;
+                    Height = newHeight;
+
+                    _isMaximized = true;
+                }
+                else
+                {
+                    // Restore saved state
+                    Canvas.SetLeft(this, _savedLeft);
+                    Canvas.SetTop(this, _savedTop);
+                    Width = _savedWidth;
+                    Height = _savedHeight;
+
+                    _isMaximized = false;
+                }
+
+                UpdateThumbnail();
+            }
+        }
+
+        /// <summary>
+        /// Check if a window handle is still valid
+        /// </summary>
+        public static bool IsWindowValid(IntPtr hwnd)
+        {
+            return IsWindow(hwnd);
         }
 
         public void Dispose()
