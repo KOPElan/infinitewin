@@ -684,6 +684,13 @@ namespace InfiniteWin
                     _savedWidth = Width;
                     _savedHeight = Height;
 
+                    // Validate saved dimensions
+                    if (_savedWidth <= 0 || _savedHeight <= 0)
+                    {
+                        System.Diagnostics.Debug.WriteLine("Cannot maximize: invalid saved dimensions");
+                        return;
+                    }
+
                     // Maximize to fill parent while preserving aspect ratio
                     const double margin = 20;
                     double availableWidth = parentWidth - (margin * 2);
