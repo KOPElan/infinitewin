@@ -102,6 +102,10 @@ namespace InfiniteWin
 
         public event EventHandler? CloseRequested;
 
+        // Public properties for layout save/load
+        public IntPtr SourceWindow => _sourceWindow;
+        public string WindowTitle { get; private set; } = string.Empty;
+
         private const double DefaultWidth = 400;
         private const double DefaultHeight = 300;
         private const double MaxInitialWidth = 800;  // Increased for better resolution
@@ -110,6 +114,7 @@ namespace InfiniteWin
         public WindowThumbnailControl(IntPtr sourceWindow)
         {
             _sourceWindow = sourceWindow;
+            WindowTitle = GetWindowTitle(_sourceWindow);
             
             // Set up border style
             BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x64, 0x96, 0xFF)); // #6496FF
@@ -144,7 +149,7 @@ namespace InfiniteWin
             // Window title
             _titleText = new TextBlock
             {
-                Text = GetWindowTitle(_sourceWindow),
+                Text = WindowTitle,
                 Foreground = Brushes.White,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0),
@@ -464,6 +469,14 @@ namespace InfiniteWin
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             CloseRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Check if a window handle is still valid
+        /// </summary>
+        public static bool IsWindowValid(IntPtr hwnd)
+        {
+            return IsWindow(hwnd);
         }
 
         public void Dispose()

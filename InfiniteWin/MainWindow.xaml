@@ -29,6 +29,16 @@
                     Padding="10,5" 
                     Margin="5"
                     Click="AddWindowButton_Click"/>
+            <Button x:Name="SaveLayoutButton" 
+                    Content="Save Layout" 
+                    Padding="10,5" 
+                    Margin="5"
+                    Click="SaveLayoutButton_Click"/>
+            <Button x:Name="LoadLayoutButton" 
+                    Content="Load Layout" 
+                    Padding="10,5" 
+                    Margin="5"
+                    Click="LoadLayoutButton_Click"/>
             <Button x:Name="ResetViewButton" 
                     Content="Reset View" 
                     Padding="10,5" 

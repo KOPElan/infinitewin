@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using Microsoft.Win32;
 
 namespace InfiniteWin
 {
@@ -156,6 +160,165 @@ namespace InfiniteWin
             {
                 AddWindowThumbnail(dialog.SelectedWindow);
             }
+        }
+
+        /// <summary>
+        /// Save Layout button click handler
+        /// Saves the current canvas layout to a JSON file
+        /// </summary>
+        private void SaveLayoutButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var saveDialog = new SaveFileDialog
+                {
+                    Filter = "InfiniteWin Layout (*.iwl)|*.iwl|JSON files (*.json)|*.json|All files (*.*)|*.*",
+                    DefaultExt = "iwl",
+                    FileName = "layout.iwl"
+                };
+
+                if (saveDialog.ShowDialog() == true)
+                {
+                    SaveLayout(saveDialog.FileName);
+                    MessageBox.Show("Layout saved successfully!", "Success", 
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save layout: {ex.Message}", 
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Load Layout button click handler
+        /// Loads a canvas layout from a JSON file
+        /// </summary>
+        private void LoadLayoutButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var openDialog = new OpenFileDialog
+                {
+                    Filter = "InfiniteWin Layout (*.iwl)|*.iwl|JSON files (*.json)|*.json|All files (*.*)|*.*",
+                    DefaultExt = "iwl"
+                };
+
+                if (openDialog.ShowDialog() == true)
+                {
+                    LoadLayout(openDialog.FileName);
+                    MessageBox.Show("Layout loaded successfully!", "Success", 
+                        MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to load layout: {ex.Message}", 
+                    "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        /// <summary>
+        /// Save the current canvas layout to a file
+        /// </summary>
+        private void SaveLayout(string filename)
+        {
+            var layout = new LayoutData
+            {
+                CanvasScaleX = CanvasScaleTransform.ScaleX,
+                CanvasScaleY = CanvasScaleTransform.ScaleY,
+                CanvasTranslateX = CanvasTranslateTransform.X,
+                CanvasTranslateY = CanvasTranslateTransform.Y
+            };
+
+            foreach (UIElement child in MainCanvas.Children)
+            {
+                if (child is WindowThumbnailControl thumbnail)
+                {
+                    layout.Windows.Add(new WindowThumbnailData
+                    {
+                        WindowHandle = thumbnail.SourceWindow,
+                        Left = Canvas.GetLeft(thumbnail),
+                        Top = Canvas.GetTop(thumbnail),
+                        Width = thumbnail.Width,
+                        Height = thumbnail.Height,
+                        WindowTitle = thumbnail.WindowTitle
+                    });
+                }
+            }
+
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            string json = JsonSerializer.Serialize(layout, options);
+            File.WriteAllText(filename, json);
+        }
+
+        /// <summary>
+        /// Load a canvas layout from a file
+        /// </summary>
+        private void LoadLayout(string filename)
+        {
+            string json = File.ReadAllText(filename);
+            var layout = JsonSerializer.Deserialize<LayoutData>(json);
+
+            if (layout == null)
+            {
+                throw new Exception("Invalid layout file");
+            }
+
+            // Clear existing thumbnails
+            foreach (UIElement child in MainCanvas.Children)
+            {
+                if (child is WindowThumbnailControl thumbnail)
+                {
+                    thumbnail.Dispose();
+                }
+            }
+            MainCanvas.Children.Clear();
+
+            // Restore canvas transform
+            CanvasScaleTransform.ScaleX = layout.CanvasScaleX;
+            CanvasScaleTransform.ScaleY = layout.CanvasScaleY;
+            CanvasTranslateTransform.X = layout.CanvasTranslateX;
+            CanvasTranslateTransform.Y = layout.CanvasTranslateY;
+            UpdateZoomDisplay();
+
+            // Restore windows
+            foreach (var windowData in layout.Windows)
+            {
+                try
+                {
+                    // Check if window still exists
+                    if (!WindowThumbnailControl.IsWindowValid(windowData.WindowHandle))
+                    {
+                        continue; // Skip windows that no longer exist
+                    }
+
+                    var thumbnail = new WindowThumbnailControl(windowData.WindowHandle);
+                    
+                    // Restore position and size
+                    Canvas.SetLeft(thumbnail, windowData.Left);
+                    Canvas.SetTop(thumbnail, windowData.Top);
+                    thumbnail.Width = windowData.Width;
+                    thumbnail.Height = windowData.Height;
+                    
+                    // Handle close event
+                    thumbnail.CloseRequested += (s, args) =>
+                    {
+                        MainCanvas.Children.Remove(thumbnail);
+                        thumbnail.Dispose();
+                    };
+                    
+                    MainCanvas.Children.Add(thumbnail);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Failed to restore window {windowData.WindowTitle}: {ex.Message}");
+                }
+            }
+
+            // Update all thumbnails
+            Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
         }
 
         /// <summary>
