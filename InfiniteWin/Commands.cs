@@ -114,4 +114,53 @@ namespace InfiniteWin
             _thumbnail.UpdateThumbnail();
         }
     }
+
+    /// <summary>
+    /// Command for resizing a window thumbnail
+    /// </summary>
+    public class ResizeWindowCommand : ICommand
+    {
+        private readonly WindowThumbnailControl _thumbnail;
+        private readonly double _oldWidth;
+        private readonly double _oldHeight;
+        private readonly double _oldLeft;
+        private readonly double _oldTop;
+        private readonly double _newWidth;
+        private readonly double _newHeight;
+        private readonly double _newLeft;
+        private readonly double _newTop;
+
+        public ResizeWindowCommand(WindowThumbnailControl thumbnail, 
+            double oldWidth, double oldHeight, double oldLeft, double oldTop,
+            double newWidth, double newHeight, double newLeft, double newTop)
+        {
+            _thumbnail = thumbnail;
+            _oldWidth = oldWidth;
+            _oldHeight = oldHeight;
+            _oldLeft = oldLeft;
+            _oldTop = oldTop;
+            _newWidth = newWidth;
+            _newHeight = newHeight;
+            _newLeft = newLeft;
+            _newTop = newTop;
+        }
+
+        public void Execute()
+        {
+            _thumbnail.Width = _newWidth;
+            _thumbnail.Height = _newHeight;
+            Canvas.SetLeft(_thumbnail, _newLeft);
+            Canvas.SetTop(_thumbnail, _newTop);
+            _thumbnail.UpdateThumbnail();
+        }
+
+        public void Undo()
+        {
+            _thumbnail.Width = _oldWidth;
+            _thumbnail.Height = _oldHeight;
+            Canvas.SetLeft(_thumbnail, _oldLeft);
+            Canvas.SetTop(_thumbnail, _oldTop);
+            _thumbnail.UpdateThumbnail();
+        }
+    }
 }

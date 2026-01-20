@@ -426,6 +426,8 @@ namespace InfiniteWin
                 // Store original position for move tracking
                 double originalLeft = x;
                 double originalTop = y;
+                double originalWidth = thumbnail.Width;
+                double originalHeight = thumbnail.Height;
                 
                 // Handle close event
                 thumbnail.CloseRequested += (s, args) =>
@@ -452,6 +454,35 @@ namespace InfiniteWin
                     {
                         var moveCommand = new MoveWindowCommand(thumbnail, originalLeft, originalTop, newLeft, newTop);
                         _undoStack.Push(moveCommand);
+                        _redoStack.Clear();
+                    }
+                };
+
+                // Track resize start for undo
+                thumbnail.ResizeStarted += (s, args) =>
+                {
+                    originalWidth = thumbnail.Width;
+                    originalHeight = thumbnail.Height;
+                    originalLeft = Canvas.GetLeft(thumbnail);
+                    originalTop = Canvas.GetTop(thumbnail);
+                };
+
+                // Track resize end for undo
+                thumbnail.ResizeCompleted += (s, args) =>
+                {
+                    double newWidth = thumbnail.Width;
+                    double newHeight = thumbnail.Height;
+                    double newLeft = Canvas.GetLeft(thumbnail);
+                    double newTop = Canvas.GetTop(thumbnail);
+                    
+                    // Only add to undo stack if size or position actually changed
+                    if (Math.Abs(newWidth - originalWidth) > 0.1 || Math.Abs(newHeight - originalHeight) > 0.1 ||
+                        Math.Abs(newLeft - originalLeft) > 0.1 || Math.Abs(newTop - originalTop) > 0.1)
+                    {
+                        var resizeCommand = new ResizeWindowCommand(thumbnail, 
+                            originalWidth, originalHeight, originalLeft, originalTop,
+                            newWidth, newHeight, newLeft, newTop);
+                        _undoStack.Push(resizeCommand);
                         _redoStack.Clear();
                     }
                 };

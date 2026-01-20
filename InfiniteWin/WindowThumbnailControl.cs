@@ -100,9 +100,31 @@ namespace InfiniteWin
         private TextBlock _titleText;
         private Border _hostBorder;
 
+        // Resize handling
+        private bool _isResizing = false;
+        private Point _resizeStartPosition;
+        private double _resizeStartWidth;
+        private double _resizeStartHeight;
+        private ResizeDirection _resizeDirection;
+
+        private enum ResizeDirection
+        {
+            None,
+            BottomRight,
+            BottomLeft,
+            TopRight,
+            TopLeft,
+            Right,
+            Left,
+            Bottom,
+            Top
+        }
+
         public event EventHandler? CloseRequested;
         public event EventHandler? DragStarted;
         public event EventHandler? DragCompleted;
+        public event EventHandler? ResizeStarted;
+        public event EventHandler? ResizeCompleted;
 
         // Public properties for layout save/load
         public IntPtr SourceWindow => _sourceWindow;
@@ -180,6 +202,13 @@ namespace InfiniteWin
             titleGrid.Children.Add(_closeButton);
 
             grid.Children.Add(titleBar);
+
+            // Add resize handles (corners)
+            AddResizeHandle(grid, HorizontalAlignment.Right, VerticalAlignment.Bottom, Cursors.SizeNWSE, ResizeDirection.BottomRight);
+            AddResizeHandle(grid, HorizontalAlignment.Left, VerticalAlignment.Bottom, Cursors.SizeNESW, ResizeDirection.BottomLeft);
+            AddResizeHandle(grid, HorizontalAlignment.Right, VerticalAlignment.Top, Cursors.SizeNESW, ResizeDirection.TopRight);
+            AddResizeHandle(grid, HorizontalAlignment.Left, VerticalAlignment.Top, Cursors.SizeNWSE, ResizeDirection.TopLeft);
+
             Child = grid;
 
             // Set initial size based on source window
@@ -200,6 +229,103 @@ namespace InfiniteWin
             GetWindowText(hwnd, sb, 256);
             string title = sb.ToString();
             return string.IsNullOrEmpty(title) ? "Untitled Window" : title;
+        }
+
+        /// <summary>
+        /// Add a resize handle to the control
+        /// </summary>
+        private void AddResizeHandle(Grid grid, HorizontalAlignment hAlign, VerticalAlignment vAlign, 
+            Cursor cursor, ResizeDirection direction)
+        {
+            var handle = new Border
+            {
+                Width = 12,
+                Height = 12,
+                Background = new SolidColorBrush(Color.FromArgb(0x80, 0x64, 0x96, 0xFF)),
+                HorizontalAlignment = hAlign,
+                VerticalAlignment = vAlign,
+                Cursor = cursor,
+                Margin = new Thickness(2),
+                CornerRadius = new CornerRadius(2)
+            };
+
+            handle.MouseLeftButtonDown += (s, e) =>
+            {
+                _isResizing = true;
+                _resizeDirection = direction;
+                _resizeStartPosition = e.GetPosition(Parent as UIElement);
+                _resizeStartWidth = Width;
+                _resizeStartHeight = Height;
+                handle.CaptureMouse();
+                ResizeStarted?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
+            };
+
+            handle.MouseLeftButtonUp += (s, e) =>
+            {
+                if (_isResizing)
+                {
+                    _isResizing = false;
+                    handle.ReleaseMouseCapture();
+                    ResizeCompleted?.Invoke(this, EventArgs.Empty);
+                    e.Handled = true;
+                }
+            };
+
+            handle.MouseMove += (s, e) =>
+            {
+                if (_isResizing && Parent is Canvas canvas)
+                {
+                    Point currentPosition = e.GetPosition(canvas);
+                    Vector delta = currentPosition - _resizeStartPosition;
+
+                    double newWidth = _resizeStartWidth;
+                    double newHeight = _resizeStartHeight;
+                    double left = Canvas.GetLeft(this);
+                    double top = Canvas.GetTop(this);
+
+                    if (double.IsNaN(left)) left = 0;
+                    if (double.IsNaN(top)) top = 0;
+
+                    // Calculate new size based on resize direction
+                    switch (_resizeDirection)
+                    {
+                        case ResizeDirection.BottomRight:
+                            newWidth = _resizeStartWidth + delta.X;
+                            newHeight = _resizeStartHeight + delta.Y;
+                            break;
+                        case ResizeDirection.BottomLeft:
+                            newWidth = _resizeStartWidth - delta.X;
+                            newHeight = _resizeStartHeight + delta.Y;
+                            Canvas.SetLeft(this, left + delta.X);
+                            break;
+                        case ResizeDirection.TopRight:
+                            newWidth = _resizeStartWidth + delta.X;
+                            newHeight = _resizeStartHeight - delta.Y;
+                            Canvas.SetTop(this, top + delta.Y);
+                            break;
+                        case ResizeDirection.TopLeft:
+                            newWidth = _resizeStartWidth - delta.X;
+                            newHeight = _resizeStartHeight - delta.Y;
+                            Canvas.SetLeft(this, left + delta.X);
+                            Canvas.SetTop(this, top + delta.Y);
+                            break;
+                    }
+
+                    // Enforce minimum size
+                    const double MinSize = 100;
+                    newWidth = Math.Max(MinSize, newWidth);
+                    newHeight = Math.Max(MinSize, newHeight);
+
+                    Width = newWidth;
+                    Height = newHeight;
+
+                    UpdateThumbnail();
+                    e.Handled = true;
+                }
+            };
+
+            grid.Children.Add(handle);
         }
 
         private void SetInitialSize()
@@ -400,8 +526,8 @@ namespace InfiniteWin
 
         private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
-            // Don't start drag if clicking close button
-            if (e.OriginalSource is Button)
+            // Don't start drag if clicking close button or already resizing
+            if (e.OriginalSource is Button || _isResizing)
                 return;
 
             // Check for double-click
