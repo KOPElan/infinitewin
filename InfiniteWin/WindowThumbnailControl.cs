@@ -132,6 +132,24 @@ namespace InfiniteWin
         public IntPtr SourceWindow => _sourceWindow;
         public string WindowTitle { get; private set; } = string.Empty;
 
+        // Selection and maximize state
+        private bool _isSelected = false;
+        private bool _isMaximized = false;
+        private double _savedLeft;
+        private double _savedTop;
+        private double _savedWidth;
+        private double _savedHeight;
+
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set
+            {
+                _isSelected = value;
+                UpdateSelectionVisual();
+            }
+        }
+
         private const double DefaultWidth = 400;
         private const double DefaultHeight = 300;
         private const double MaxInitialWidth = 800;  // Increased for better resolution
@@ -606,6 +624,64 @@ namespace InfiniteWin
         private void CloseButton_Click(object sender, RoutedEventArgs e)
         {
             CloseRequested?.Invoke(this, EventArgs.Empty);
+        }
+
+        /// <summary>
+        /// Update visual appearance based on selection state
+        /// </summary>
+        private void UpdateSelectionVisual()
+        {
+            if (_isSelected)
+            {
+                // Show selection with a brighter border
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xD7, 0x00)); // Gold
+                BorderThickness = new Thickness(3);
+            }
+            else
+            {
+                // Normal border
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x64, 0x96, 0xFF)); // #6496FF
+                BorderThickness = new Thickness(2);
+            }
+        }
+
+        /// <summary>
+        /// Toggle between maximized (filling parent window) and normal size
+        /// </summary>
+        public void ToggleMaximize(double parentWidth, double parentHeight)
+        {
+            if (Parent is Canvas canvas)
+            {
+                if (!_isMaximized)
+                {
+                    // Save current state
+                    _savedLeft = Canvas.GetLeft(this);
+                    _savedTop = Canvas.GetTop(this);
+                    _savedWidth = Width;
+                    _savedHeight = Height;
+
+                    // Maximize to fill parent (accounting for some margin)
+                    const double margin = 20;
+                    Canvas.SetLeft(this, margin);
+                    Canvas.SetTop(this, margin);
+                    Width = parentWidth - (margin * 2);
+                    Height = parentHeight - (margin * 2);
+
+                    _isMaximized = true;
+                }
+                else
+                {
+                    // Restore saved state
+                    Canvas.SetLeft(this, _savedLeft);
+                    Canvas.SetTop(this, _savedTop);
+                    Width = _savedWidth;
+                    Height = _savedHeight;
+
+                    _isMaximized = false;
+                }
+
+                UpdateThumbnail();
+            }
         }
 
         /// <summary>

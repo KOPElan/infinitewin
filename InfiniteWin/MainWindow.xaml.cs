@@ -29,6 +29,9 @@ namespace InfiniteWin
         private Stack<ICommand> _undoStack = new Stack<ICommand>();
         private Stack<ICommand> _redoStack = new Stack<ICommand>();
 
+        // Currently selected thumbnail for spacebar toggle
+        private WindowThumbnailControl? _selectedThumbnail = null;
+
         public MainWindow()
         {
             InitializeComponent();
@@ -68,6 +71,22 @@ namespace InfiniteWin
             var openCommand = new RoutedCommand();
             openCommand.InputGestures.Add(new KeyGesture(Key.O, ModifierKeys.Control));
             CommandBindings.Add(new CommandBinding(openCommand, (s, e) => LoadLayoutButton_Click(s, e)));
+
+            // Space - Toggle maximize selected thumbnail
+            var toggleMaximizeCommand = new RoutedCommand();
+            toggleMaximizeCommand.InputGestures.Add(new KeyGesture(Key.Space));
+            CommandBindings.Add(new CommandBinding(toggleMaximizeCommand, (s, e) => ToggleMaximizeThumbnail()));
+        }
+
+        /// <summary>
+        /// Toggle maximize state of the selected thumbnail
+        /// </summary>
+        private void ToggleMaximizeThumbnail()
+        {
+            if (_selectedThumbnail != null)
+            {
+                _selectedThumbnail.ToggleMaximize(ActualWidth, ActualHeight);
+            }
         }
 
         /// <summary>
@@ -457,9 +476,29 @@ namespace InfiniteWin
             double originalWidth = thumbnail.Width;
             double originalHeight = thumbnail.Height;
             
+            // Handle selection when clicked
+            thumbnail.MouseDown += (s, args) =>
+            {
+                // Deselect previous thumbnail
+                if (_selectedThumbnail != null && _selectedThumbnail != thumbnail)
+                {
+                    _selectedThumbnail.IsSelected = false;
+                }
+                
+                // Select this thumbnail
+                _selectedThumbnail = thumbnail;
+                thumbnail.IsSelected = true;
+            };
+            
             // Handle close event
             thumbnail.CloseRequested += (s, args) =>
             {
+                // Clear selection if this thumbnail is selected
+                if (_selectedThumbnail == thumbnail)
+                {
+                    _selectedThumbnail = null;
+                }
+                
                 var removeCommand = new RemoveWindowCommand(MainCanvas, thumbnail, SetupThumbnailEventHandlers);
                 ExecuteCommand(removeCommand);
             };
