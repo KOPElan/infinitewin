@@ -575,6 +575,9 @@ namespace InfiniteWin
             _dragStartPosition = e.GetPosition(Parent as UIElement);
             CaptureMouse();
             
+            // Bring to front during drag by setting high ZIndex
+            Panel.SetZIndex(this, 1000);
+            
             // Notify drag started
             DragStarted?.Invoke(this, EventArgs.Empty);
             
@@ -587,6 +590,9 @@ namespace InfiniteWin
             {
                 _isDragging = false;
                 ReleaseMouseCapture();
+                
+                // Reset ZIndex after drag
+                Panel.SetZIndex(this, 0);
                 
                 // Notify drag completed
                 DragCompleted?.Invoke(this, EventArgs.Empty);
