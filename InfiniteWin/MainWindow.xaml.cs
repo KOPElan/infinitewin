@@ -706,7 +706,7 @@ namespace InfiniteWin
         /// </summary>
         private void DeferredUpdateAllThumbnails()
         {
-            DeferredUpdateAllThumbnails();
+            Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
         }
 
         /// <summary>
