@@ -550,6 +550,48 @@ namespace InfiniteWin
             }
         }
 
+        /// <summary>
+        /// Set the visibility of the DWM thumbnail
+        /// Used to hide other thumbnails during drag to prevent z-order issues
+        /// </summary>
+        public void SetThumbnailVisibility(bool visible)
+        {
+            if (_thumbnail == IntPtr.Zero)
+                return;
+
+            try
+            {
+                var window = Window.GetWindow(this);
+                if (window == null)
+                    return;
+
+                // Get the current position
+                var topLeft = _hostBorder.TransformToAncestor(window).Transform(new Point(0, 0));
+                var bottomRight = _hostBorder.TransformToAncestor(window).Transform(
+                    new Point(_hostBorder.ActualWidth, _hostBorder.ActualHeight));
+
+                int left = (int)topLeft.X;
+                int top = (int)topLeft.Y;
+                int right = (int)bottomRight.X;
+                int bottom = (int)bottomRight.Y;
+
+                var props = new DWM_THUMBNAIL_PROPERTIES
+                {
+                    dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE | DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY,
+                    rcDestination = new RECT(left, top, right, bottom),
+                    opacity = visible ? (byte)255 : (byte)0, // Hide by setting opacity to 0
+                    fVisible = visible,
+                    fSourceClientAreaOnly = false
+                };
+
+                DwmUpdateThumbnailProperties(_thumbnail, ref props);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to set thumbnail visibility: {ex.Message}");
+            }
+        }
+
         protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
         {
             base.OnRenderSizeChanged(sizeInfo);
