@@ -77,6 +77,9 @@ namespace InfiniteWin
         [DllImport("user32.dll")]
         private static extern bool IsWindow(IntPtr hWnd);
 
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
+
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
 
@@ -194,6 +197,51 @@ namespace InfiniteWin
 
         private void SetInitialSize()
         {
+            // Try to get the source window dimensions
+            if (GetWindowRect(_sourceWindow, out RECT rect))
+            {
+                int sourceWidth = rect.Width;
+                int sourceHeight = rect.Height;
+                
+                if (sourceWidth > 0 && sourceHeight > 0)
+                {
+                    // Calculate aspect ratio
+                    double aspectRatio = (double)sourceWidth / sourceHeight;
+                    
+                    // Start with a target width, constrain to max
+                    double targetWidth = Math.Min(DefaultWidth, MaxInitialWidth);
+                    double targetHeight = targetWidth / aspectRatio;
+                    
+                    // If height exceeds max, scale down based on height instead
+                    if (targetHeight > MaxInitialHeight)
+                    {
+                        targetHeight = MaxInitialHeight;
+                        targetWidth = targetHeight * aspectRatio;
+                    }
+                    
+                    // Ensure minimum size (at least 200px on the smaller dimension)
+                    const double MinDimension = 200;
+                    if (targetWidth < MinDimension && targetHeight < MinDimension)
+                    {
+                        if (aspectRatio >= 1.0)
+                        {
+                            targetWidth = MinDimension;
+                            targetHeight = MinDimension / aspectRatio;
+                        }
+                        else
+                        {
+                            targetHeight = MinDimension;
+                            targetWidth = MinDimension * aspectRatio;
+                        }
+                    }
+                    
+                    Width = targetWidth;
+                    Height = targetHeight;
+                    return;
+                }
+            }
+            
+            // Fallback to default size if we can't get window dimensions
             Width = DefaultWidth;
             Height = DefaultHeight;
         }
