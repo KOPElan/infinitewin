@@ -684,12 +684,39 @@ namespace InfiniteWin
                     _savedWidth = Width;
                     _savedHeight = Height;
 
-                    // Maximize to fill parent (accounting for some margin)
+                    // Maximize to fill parent while preserving aspect ratio
                     const double margin = 20;
-                    Canvas.SetLeft(this, margin);
-                    Canvas.SetTop(this, margin);
-                    Width = parentWidth - (margin * 2);
-                    Height = parentHeight - (margin * 2);
+                    double availableWidth = parentWidth - (margin * 2);
+                    double availableHeight = parentHeight - (margin * 2);
+                    
+                    // Calculate current aspect ratio
+                    double aspectRatio = _savedWidth / _savedHeight;
+                    
+                    // Calculate dimensions that fit within available space while preserving aspect ratio
+                    double newWidth, newHeight;
+                    
+                    // Determine which dimension to fill (the longer edge)
+                    if (availableWidth / availableHeight > aspectRatio)
+                    {
+                        // Height is the limiting factor - fill height
+                        newHeight = availableHeight;
+                        newWidth = newHeight * aspectRatio;
+                    }
+                    else
+                    {
+                        // Width is the limiting factor - fill width
+                        newWidth = availableWidth;
+                        newHeight = newWidth / aspectRatio;
+                    }
+                    
+                    // Center the thumbnail in the available space
+                    double left = margin + (availableWidth - newWidth) / 2;
+                    double top = margin + (availableHeight - newHeight) / 2;
+                    
+                    Canvas.SetLeft(this, left);
+                    Canvas.SetTop(this, top);
+                    Width = newWidth;
+                    Height = newHeight;
 
                     _isMaximized = true;
                 }
