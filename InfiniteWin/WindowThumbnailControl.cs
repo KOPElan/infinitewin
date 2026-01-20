@@ -101,6 +101,8 @@ namespace InfiniteWin
         private Border _hostBorder;
 
         public event EventHandler? CloseRequested;
+        public event EventHandler? DragStarted;
+        public event EventHandler? DragCompleted;
 
         // Public properties for layout save/load
         public IntPtr SourceWindow => _sourceWindow;
@@ -417,6 +419,10 @@ namespace InfiniteWin
             _isDragging = true;
             _dragStartPosition = e.GetPosition(Parent as UIElement);
             CaptureMouse();
+            
+            // Notify drag started
+            DragStarted?.Invoke(this, EventArgs.Empty);
+            
             e.Handled = true;
         }
 
@@ -426,6 +432,10 @@ namespace InfiniteWin
             {
                 _isDragging = false;
                 ReleaseMouseCapture();
+                
+                // Notify drag completed
+                DragCompleted?.Invoke(this, EventArgs.Empty);
+                
                 e.Handled = true;
             }
         }

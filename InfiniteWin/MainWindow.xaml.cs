@@ -22,6 +22,10 @@ namespace InfiniteWin
         private Point _lastMousePosition;
         private bool _isPanning = false;
 
+        // Undo/Redo system
+        private Stack<ICommand> _undoStack = new Stack<ICommand>();
+        private Stack<ICommand> _redoStack = new Stack<ICommand>();
+
         public MainWindow()
         {
             InitializeComponent();
@@ -32,6 +36,71 @@ namespace InfiniteWin
             MainCanvas.MouseMove += Canvas_MouseMove;
             MainCanvas.MouseUp += Canvas_MouseUp;
             MainCanvas.MouseLeave += Canvas_MouseLeave;
+
+            // Set up keyboard shortcuts
+            SetupKeyboardShortcuts();
+        }
+
+        /// <summary>
+        /// Set up keyboard shortcuts
+        /// </summary>
+        private void SetupKeyboardShortcuts()
+        {
+            // Ctrl+Z - Undo
+            var undoCommand = new RoutedCommand();
+            undoCommand.InputGestures.Add(new KeyGesture(Key.Z, ModifierKeys.Control));
+            CommandBindings.Add(new CommandBinding(undoCommand, (s, e) => Undo()));
+
+            // Ctrl+Y - Redo
+            var redoCommand = new RoutedCommand();
+            redoCommand.InputGestures.Add(new KeyGesture(Key.Y, ModifierKeys.Control));
+            CommandBindings.Add(new CommandBinding(redoCommand, (s, e) => Redo()));
+
+            // Ctrl+S - Save Layout
+            var saveCommand = new RoutedCommand();
+            saveCommand.InputGestures.Add(new KeyGesture(Key.S, ModifierKeys.Control));
+            CommandBindings.Add(new CommandBinding(saveCommand, (s, e) => SaveLayoutButton_Click(s, e)));
+
+            // Ctrl+O - Open Layout
+            var openCommand = new RoutedCommand();
+            openCommand.InputGestures.Add(new KeyGesture(Key.O, ModifierKeys.Control));
+            CommandBindings.Add(new CommandBinding(openCommand, (s, e) => LoadLayoutButton_Click(s, e)));
+        }
+
+        /// <summary>
+        /// Undo the last command
+        /// </summary>
+        private void Undo()
+        {
+            if (_undoStack.Count > 0)
+            {
+                var command = _undoStack.Pop();
+                command.Undo();
+                _redoStack.Push(command);
+            }
+        }
+
+        /// <summary>
+        /// Redo the last undone command
+        /// </summary>
+        private void Redo()
+        {
+            if (_redoStack.Count > 0)
+            {
+                var command = _redoStack.Pop();
+                command.Execute();
+                _undoStack.Push(command);
+            }
+        }
+
+        /// <summary>
+        /// Execute a command and add it to the undo stack
+        /// </summary>
+        private void ExecuteCommand(ICommand command)
+        {
+            command.Execute();
+            _undoStack.Push(command);
+            _redoStack.Clear(); // Clear redo stack when new command is executed
         }
 
         /// <summary>
@@ -354,14 +423,42 @@ namespace InfiniteWin
                 Canvas.SetLeft(thumbnail, x);
                 Canvas.SetTop(thumbnail, y);
                 
+                // Store original position for move tracking
+                double originalLeft = x;
+                double originalTop = y;
+                
                 // Handle close event
                 thumbnail.CloseRequested += (s, args) =>
                 {
-                    MainCanvas.Children.Remove(thumbnail);
-                    thumbnail.Dispose();
+                    var removeCommand = new RemoveWindowCommand(MainCanvas, thumbnail);
+                    ExecuteCommand(removeCommand);
+                };
+
+                // Track drag start position for undo
+                thumbnail.DragStarted += (s, args) =>
+                {
+                    originalLeft = Canvas.GetLeft(thumbnail);
+                    originalTop = Canvas.GetTop(thumbnail);
+                };
+
+                // Track drag end for undo
+                thumbnail.DragCompleted += (s, args) =>
+                {
+                    double newLeft = Canvas.GetLeft(thumbnail);
+                    double newTop = Canvas.GetTop(thumbnail);
+                    
+                    // Only add to undo stack if position actually changed
+                    if (Math.Abs(newLeft - originalLeft) > 0.1 || Math.Abs(newTop - originalTop) > 0.1)
+                    {
+                        var moveCommand = new MoveWindowCommand(thumbnail, originalLeft, originalTop, newLeft, newTop);
+                        _undoStack.Push(moveCommand);
+                        _redoStack.Clear();
+                    }
                 };
                 
-                MainCanvas.Children.Add(thumbnail);
+                // Execute add command
+                var addCommand = new AddWindowCommand(MainCanvas, thumbnail);
+                ExecuteCommand(addCommand);
             }
             catch (Exception ex)
             {
