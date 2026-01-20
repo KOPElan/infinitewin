@@ -18,9 +18,9 @@
             </Canvas>
         </Border>
 
-        <!-- Toolbar (Top Right) -->
+        <!-- Toolbar (Top Center) -->
         <StackPanel Orientation="Horizontal" 
-                    HorizontalAlignment="Right" 
+                    HorizontalAlignment="Center" 
                     VerticalAlignment="Top" 
                     Margin="10"
                     Background="#CC000000">

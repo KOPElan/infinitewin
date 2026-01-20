@@ -517,15 +517,24 @@ namespace InfiniteWin
                 if (window == null)
                     return;
 
+                // Get DPI scale factors
+                var source = PresentationSource.FromVisual(window);
+                if (source?.CompositionTarget == null)
+                    return;
+
+                double dpiScaleX = source.CompositionTarget.TransformToDevice.M11;
+                double dpiScaleY = source.CompositionTarget.TransformToDevice.M22;
+
                 // Get the four corners of the host border in window coordinates to account for transforms
                 var topLeft = _hostBorder.TransformToAncestor(window).Transform(new Point(0, 0));
                 var bottomRight = _hostBorder.TransformToAncestor(window).Transform(
                     new Point(_hostBorder.ActualWidth, _hostBorder.ActualHeight));
 
-                int left = (int)topLeft.X;
-                int top = (int)topLeft.Y;
-                int right = (int)bottomRight.X;
-                int bottom = (int)bottomRight.Y;
+                // Convert from WPF DIPs to physical pixels for DWM
+                int left = (int)(topLeft.X * dpiScaleX);
+                int top = (int)(topLeft.Y * dpiScaleY);
+                int right = (int)(bottomRight.X * dpiScaleX);
+                int bottom = (int)(bottomRight.Y * dpiScaleY);
 
                 var props = new DWM_THUMBNAIL_PROPERTIES
                 {
@@ -556,6 +565,10 @@ namespace InfiniteWin
             if (e.OriginalSource is Button || _isResizing)
                 return;
 
+            // Bring to front by reordering in parent Canvas
+            // This ensures both WPF elements and DWM thumbnails appear in correct order
+            BringToFront();
+
             // Select this thumbnail on click
             IsSelected = true;
 
@@ -579,6 +592,27 @@ namespace InfiniteWin
             DragStarted?.Invoke(this, EventArgs.Empty);
             
             e.Handled = true;
+        }
+
+        /// <summary>
+        /// Bring this window to the front by moving it to the end of parent's children collection
+        /// This ensures both WPF rendering and DWM thumbnail overlay order are correct
+        /// </summary>
+        private void BringToFront()
+        {
+            if (Parent is Panel panel)
+            {
+                var index = panel.Children.IndexOf(this);
+                if (index >= 0 && index < panel.Children.Count - 1)
+                {
+                    // Remove and re-add to move to end (rendered last = on top)
+                    panel.Children.RemoveAt(index);
+                    panel.Children.Add(this);
+                    
+                    // Defer thumbnail update to allow visual tree to update first
+                    Dispatcher.BeginInvoke(new Action(() => UpdateThumbnail()), System.Windows.Threading.DispatcherPriority.Render);
+                }
+            }
         }
 
         private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
@@ -754,6 +788,22 @@ namespace InfiniteWin
         {
             if (!_disposed)
             {
+                // Stop dragging if currently dragging
+                if (_isDragging)
+                {
+                    _isDragging = false;
+                    if (IsMouseCaptured)
+                    {
+                        ReleaseMouseCapture();
+                    }
+                }
+                
+                // Stop resizing if currently resizing
+                if (_isResizing)
+                {
+                    _isResizing = false;
+                }
+                
                 UnregisterThumbnail();
                 _disposed = true;
             }
