@@ -31,6 +31,13 @@ namespace InfiniteWin
 
         // Currently selected thumbnail for spacebar toggle
         private WindowThumbnailControl? _selectedThumbnail = null;
+        
+        // Canvas zoom state for spacebar toggle
+        private bool _isCanvasZoomed = false;
+        private double _savedCanvasScaleX = 1.0;
+        private double _savedCanvasScaleY = 1.0;
+        private double _savedCanvasTranslateX = 0;
+        private double _savedCanvasTranslateY = 0;
 
         public MainWindow()
         {
@@ -91,21 +98,95 @@ namespace InfiniteWin
         }
 
         /// <summary>
-        /// Toggle maximize state of the selected thumbnail
+        /// Toggle canvas zoom to fit the selected thumbnail in the window
         /// </summary>
         private void ToggleMaximizeThumbnail()
         {
-            if (_selectedThumbnail != null)
+            if (_selectedThumbnail == null)
+                return;
+
+            if (!_isCanvasZoomed)
             {
-                // Use RenderSize which is more reliable than ActualWidth/ActualHeight
-                double width = RenderSize.Width;
-                double height = RenderSize.Height;
+                // Save current canvas state
+                _savedCanvasScaleX = CanvasScaleTransform.ScaleX;
+                _savedCanvasScaleY = CanvasScaleTransform.ScaleY;
+                _savedCanvasTranslateX = CanvasTranslateTransform.X;
+                _savedCanvasTranslateY = CanvasTranslateTransform.Y;
+
+                // Get thumbnail position and size in canvas coordinates
+                double thumbnailLeft = Canvas.GetLeft(_selectedThumbnail);
+                double thumbnailTop = Canvas.GetTop(_selectedThumbnail);
+                double thumbnailWidth = _selectedThumbnail.Width;
+                double thumbnailHeight = _selectedThumbnail.Height;
+
+                // Handle NaN values
+                if (double.IsNaN(thumbnailLeft)) thumbnailLeft = 0;
+                if (double.IsNaN(thumbnailTop)) thumbnailTop = 0;
+
+                // Get the available window size (account for margins)
+                const double margin = 40; // Leave some margin
+                double availableWidth = RenderSize.Width - (margin * 2);
+                double availableHeight = RenderSize.Height - (margin * 2);
+
+                if (availableWidth <= 0 || availableHeight <= 0 || thumbnailWidth <= 0 || thumbnailHeight <= 0)
+                    return;
+
+                // Calculate the scale needed to fit the thumbnail in the window
+                double scaleX = availableWidth / thumbnailWidth;
+                double scaleY = availableHeight / thumbnailHeight;
+                double scale = Math.Min(scaleX, scaleY); // Use the smaller scale to ensure it fits
+
+                // Clamp the scale to valid zoom range
+                scale = Math.Max(MinZoom, Math.Min(MaxZoom, scale));
+
+                // Calculate the thumbnail center in canvas coordinates
+                double thumbnailCenterX = thumbnailLeft + thumbnailWidth / 2;
+                double thumbnailCenterY = thumbnailTop + thumbnailHeight / 2;
+
+                // Calculate the window center
+                double windowCenterX = RenderSize.Width / 2;
+                double windowCenterY = RenderSize.Height / 2;
+
+                // Calculate translation to center the thumbnail in the window
+                // After scaling, the thumbnail center will be at: thumbnailCenter * scale + translate
+                // We want it to be at windowCenter, so: thumbnailCenter * scale + translate = windowCenter
+                // Therefore: translate = windowCenter - thumbnailCenter * scale
+                double translateX = windowCenterX - thumbnailCenterX * scale;
+                double translateY = windowCenterY - thumbnailCenterY * scale;
+
+                // Apply the new transform
+                CanvasScaleTransform.ScaleX = scale;
+                CanvasScaleTransform.ScaleY = scale;
+                CanvasTranslateTransform.X = translateX;
+                CanvasTranslateTransform.Y = translateY;
+
+                _isCanvasZoomed = true;
+            }
+            else
+            {
+                RestoreCanvasZoom();
+            }
+
+            // Update zoom display and thumbnails
+            UpdateZoomDisplay();
+            Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
+        }
+
+        /// <summary>
+        /// Restore the canvas to its saved zoom state
+        /// </summary>
+        private void RestoreCanvasZoom()
+        {
+            if (_isCanvasZoomed)
+            {
+                CanvasScaleTransform.ScaleX = _savedCanvasScaleX;
+                CanvasScaleTransform.ScaleY = _savedCanvasScaleY;
+                CanvasTranslateTransform.X = _savedCanvasTranslateX;
+                CanvasTranslateTransform.Y = _savedCanvasTranslateY;
+                _isCanvasZoomed = false;
                 
-                // Validate dimensions
-                if (width > 0 && height > 0)
-                {
-                    _selectedThumbnail.ToggleMaximize(width, height);
-                }
+                UpdateZoomDisplay();
+                Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
             }
         }
 
@@ -506,10 +587,23 @@ namespace InfiniteWin
                             otherThumbnail.IsSelected = false;
                         }
                     }
+                    
+                    // If switching to a different thumbnail while zoomed, restore canvas first
+                    if (_isCanvasZoomed && _selectedThumbnail != thumbnail)
+                    {
+                        RestoreCanvasZoom();
+                    }
+                    
                     _selectedThumbnail = thumbnail;
                 }
                 else if (_selectedThumbnail == thumbnail)
                 {
+                    // If deselecting the current thumbnail while zoomed, restore canvas
+                    if (_isCanvasZoomed)
+                    {
+                        RestoreCanvasZoom();
+                    }
+                    
                     _selectedThumbnail = null;
                 }
             };
@@ -520,6 +614,12 @@ namespace InfiniteWin
                 // Clear selection if this thumbnail is selected
                 if (_selectedThumbnail == thumbnail)
                 {
+                    // Restore canvas zoom if currently zoomed
+                    if (_isCanvasZoomed)
+                    {
+                        RestoreCanvasZoom();
+                    }
+                    
                     _selectedThumbnail = null;
                 }
                 
