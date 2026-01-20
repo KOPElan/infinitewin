@@ -517,15 +517,24 @@ namespace InfiniteWin
                 if (window == null)
                     return;
 
+                // Get DPI scale factors
+                var source = PresentationSource.FromVisual(window);
+                if (source?.CompositionTarget == null)
+                    return;
+
+                double dpiScaleX = source.CompositionTarget.TransformToDevice.M11;
+                double dpiScaleY = source.CompositionTarget.TransformToDevice.M22;
+
                 // Get the four corners of the host border in window coordinates to account for transforms
                 var topLeft = _hostBorder.TransformToAncestor(window).Transform(new Point(0, 0));
                 var bottomRight = _hostBorder.TransformToAncestor(window).Transform(
                     new Point(_hostBorder.ActualWidth, _hostBorder.ActualHeight));
 
-                int left = (int)topLeft.X;
-                int top = (int)topLeft.Y;
-                int right = (int)bottomRight.X;
-                int bottom = (int)bottomRight.Y;
+                // Convert from WPF DIPs to physical pixels for DWM
+                int left = (int)(topLeft.X * dpiScaleX);
+                int top = (int)(topLeft.Y * dpiScaleY);
+                int right = (int)(bottomRight.X * dpiScaleX);
+                int bottom = (int)(bottomRight.Y * dpiScaleY);
 
                 var props = new DWM_THUMBNAIL_PROPERTIES
                 {
