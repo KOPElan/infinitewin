@@ -92,6 +92,7 @@ namespace InfiniteWin
         
         private Point _dragStartPosition;
         private bool _isDragging = false;
+        private int _baseZIndex = 0; // Base z-index when not dragging
         
         private DateTime _lastClickTime = DateTime.MinValue;
         private const int DoubleClickMilliseconds = 500;
@@ -108,7 +109,10 @@ namespace InfiniteWin
         private ResizeDirection _resizeDirection;
 
         private const double MinimumThumbnailSize = 100;
-        private const int DragZIndex = 1000; // Z-index for dragged element to appear on top
+        private const int DragZIndexOffset = 10000; // Offset added during drag to appear on top
+        
+        // Static counter for z-index ordering (shared across all instances)
+        private static int _nextZIndex = 1;
 
         private enum ResizeDirection
         {
@@ -557,6 +561,10 @@ namespace InfiniteWin
             if (e.OriginalSource is Button || _isResizing)
                 return;
 
+            // Bring to front when clicked - increment counter and assign new z-index
+            _baseZIndex = _nextZIndex++;
+            Panel.SetZIndex(this, _baseZIndex);
+
             // Select this thumbnail on click
             IsSelected = true;
 
@@ -576,8 +584,8 @@ namespace InfiniteWin
             _dragStartPosition = e.GetPosition(Parent as UIElement);
             CaptureMouse();
             
-            // Bring to front during drag by setting high ZIndex
-            Panel.SetZIndex(this, DragZIndex);
+            // During drag, add offset to appear on top of all windows
+            Panel.SetZIndex(this, _baseZIndex + DragZIndexOffset);
             
             // Notify drag started
             DragStarted?.Invoke(this, EventArgs.Empty);
@@ -592,8 +600,8 @@ namespace InfiniteWin
                 _isDragging = false;
                 ReleaseMouseCapture();
                 
-                // Reset ZIndex after drag
-                Panel.SetZIndex(this, 0);
+                // Restore base ZIndex after drag (keep it at front, don't reset to 0)
+                Panel.SetZIndex(this, _baseZIndex);
                 
                 // Notify drag completed
                 DragCompleted?.Invoke(this, EventArgs.Empty);
@@ -761,10 +769,10 @@ namespace InfiniteWin
         {
             if (!_disposed)
             {
-                // Reset z-index if currently dragging
+                // Restore base z-index if currently dragging
                 if (_isDragging)
                 {
-                    Panel.SetZIndex(this, 0);
+                    Panel.SetZIndex(this, _baseZIndex);
                     _isDragging = false;
                 }
                 
