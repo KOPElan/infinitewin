@@ -263,14 +263,19 @@ namespace InfiniteWin
 
             try
             {
-                // Get the position of the host border in window coordinates
-                var topLeft = _hostBorder.TransformToAncestor(Window.GetWindow(this))
-                    .Transform(new Point(0, 0));
+                var window = Window.GetWindow(this);
+                if (window == null)
+                    return;
+
+                // Get the four corners of the host border in window coordinates to account for transforms
+                var topLeft = _hostBorder.TransformToAncestor(window).Transform(new Point(0, 0));
+                var bottomRight = _hostBorder.TransformToAncestor(window).Transform(
+                    new Point(_hostBorder.ActualWidth, _hostBorder.ActualHeight));
 
                 int left = (int)topLeft.X;
                 int top = (int)topLeft.Y;
-                int right = left + (int)_hostBorder.ActualWidth;
-                int bottom = top + (int)_hostBorder.ActualHeight;
+                int right = (int)bottomRight.X;
+                int bottom = (int)bottomRight.Y;
 
                 var props = new DWM_THUMBNAIL_PROPERTIES
                 {
