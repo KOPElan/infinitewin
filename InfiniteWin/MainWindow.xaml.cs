@@ -63,8 +63,8 @@ namespace InfiniteWin
             // Update zoom display
             UpdateZoomDisplay();
             
-            // Update all thumbnails after zoom
-            UpdateAllThumbnails();
+            // Update all thumbnails after zoom (deferred to allow layout update)
+            Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
 
             e.Handled = true;
         }
@@ -100,8 +100,8 @@ namespace InfiniteWin
 
                 _lastMousePosition = currentPosition;
                 
-                // Update all thumbnails during pan
-                UpdateAllThumbnails();
+                // Update all thumbnails during pan (deferred to allow layout update)
+                Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
                 
                 e.Handled = true;
             }
@@ -170,8 +170,8 @@ namespace InfiniteWin
             CanvasTranslateTransform.Y = 0;
             UpdateZoomDisplay();
             
-            // Update all thumbnails after reset
-            UpdateAllThumbnails();
+            // Update all thumbnails after reset (deferred to allow layout update)
+            Dispatcher.BeginInvoke(new Action(() => UpdateAllThumbnails()), System.Windows.Threading.DispatcherPriority.Render);
         }
 
         /// <summary>
@@ -213,6 +213,9 @@ namespace InfiniteWin
         /// </summary>
         private void UpdateAllThumbnails()
         {
+            // Force layout update to ensure transforms are applied
+            MainCanvas.UpdateLayout();
+            
             foreach (UIElement child in MainCanvas.Children)
             {
                 if (child is WindowThumbnailControl thumbnail)
