@@ -1,5 +1,6 @@
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -561,8 +562,8 @@ namespace InfiniteWin
             if (e.OriginalSource is Button || _isResizing)
                 return;
 
-            // Bring to front when clicked - increment counter and assign new z-index
-            _baseZIndex = _nextZIndex++;
+            // Bring to front when clicked - increment counter atomically and assign new z-index
+            _baseZIndex = Interlocked.Increment(ref _nextZIndex);
             Panel.SetZIndex(this, _baseZIndex);
 
             // Select this thumbnail on click
