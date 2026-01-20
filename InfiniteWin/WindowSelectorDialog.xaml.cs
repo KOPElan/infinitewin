@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
@@ -33,6 +34,8 @@ namespace InfiniteWin
         #endregion
 
         public IntPtr SelectedWindow { get; private set; }
+
+        private List<WindowInfo> _allWindows = new List<WindowInfo>();
 
         private class WindowInfo
         {
@@ -88,11 +91,43 @@ namespace InfiniteWin
             // Sort by title
             windows.Sort((a, b) => string.Compare(a.Title, b.Title, StringComparison.OrdinalIgnoreCase));
 
+            // Store all windows
+            _allWindows = windows;
+
             // Populate list box
-            WindowListBox.ItemsSource = windows;
+            WindowListBox.ItemsSource = _allWindows;
 
             // Select first item if available
-            if (windows.Count > 0)
+            if (_allWindows.Count > 0)
+            {
+                WindowListBox.SelectedIndex = 0;
+            }
+        }
+
+        /// <summary>
+        /// Handle search box text changes to filter windows
+        /// </summary>
+        private void SearchBox_TextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
+        {
+            string searchText = SearchBox.Text.Trim();
+
+            if (string.IsNullOrEmpty(searchText))
+            {
+                // Show all windows
+                WindowListBox.ItemsSource = _allWindows;
+            }
+            else
+            {
+                // Filter windows by search text (case-insensitive)
+                var filteredWindows = _allWindows
+                    .Where(w => w.Title.IndexOf(searchText, StringComparison.OrdinalIgnoreCase) >= 0)
+                    .ToList();
+                
+                WindowListBox.ItemsSource = filteredWindows;
+            }
+
+            // Select first item if available
+            if (WindowListBox.Items.Count > 0)
             {
                 WindowListBox.SelectedIndex = 0;
             }
