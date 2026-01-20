@@ -150,6 +150,7 @@ namespace InfiniteWin
         private const double DefaultHeight = 300;
         private const double MaxInitialWidth = 800;
         private const double MaxInitialHeight = 600;
+        private const string EmbeddedWindowSuffix = " [EMBEDDED]";
 
         public WindowEmbedControl(IntPtr sourceWindow)
         {
@@ -190,7 +191,7 @@ namespace InfiniteWin
             // Window title
             _titleText = new TextBlock
             {
-                Text = WindowTitle + " [EMBEDDED]",
+                Text = WindowTitle + EmbeddedWindowSuffix,
                 Foreground = Brushes.White,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0),
@@ -449,6 +450,7 @@ namespace InfiniteWin
             {
                 // Save original parent before modifying it
                 // Note: GetParent returns IntPtr.Zero for top-level windows (desktop parent)
+                // When restoring, SetParent with IntPtr.Zero will restore the window to the desktop
                 _originalParent = GetParent(_sourceWindow);
                 
                 // Save original window style
