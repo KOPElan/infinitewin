@@ -600,8 +600,8 @@ namespace InfiniteWin
                     panel.Children.RemoveAt(index);
                     panel.Children.Add(this);
                     
-                    // Ensure DWM thumbnail z-order/properties are updated after reordering
-                    UpdateThumbnail();
+                    // Defer thumbnail update to allow visual tree to update first
+                    Dispatcher.BeginInvoke(new Action(() => UpdateThumbnail()), System.Windows.Threading.DispatcherPriority.Render);
                 }
             }
         }
