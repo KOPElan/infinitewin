@@ -43,8 +43,24 @@ namespace InfiniteWin
             MainCanvas.MouseUp += Canvas_MouseUp;
             MainCanvas.MouseLeave += Canvas_MouseLeave;
 
+            // Handle spacebar at the preview level to prevent button activation
+            PreviewKeyDown += MainWindow_PreviewKeyDown;
+
             // Set up keyboard shortcuts
             SetupKeyboardShortcuts();
+        }
+
+        /// <summary>
+        /// Handle preview key down to intercept spacebar before buttons get it
+        /// </summary>
+        private void MainWindow_PreviewKeyDown(object sender, KeyEventArgs e)
+        {
+            // Handle spacebar for maximize toggle
+            if (e.Key == Key.Space && _selectedThumbnail != null)
+            {
+                ToggleMaximizeThumbnail();
+                e.Handled = true;
+            }
         }
 
         /// <summary>
@@ -71,11 +87,6 @@ namespace InfiniteWin
             var openCommand = new RoutedCommand();
             openCommand.InputGestures.Add(new KeyGesture(Key.O, ModifierKeys.Control));
             CommandBindings.Add(new CommandBinding(openCommand, (s, e) => LoadLayoutButton_Click(s, e)));
-
-            // Space - Toggle maximize selected thumbnail
-            var toggleMaximizeCommand = new RoutedCommand();
-            toggleMaximizeCommand.InputGestures.Add(new KeyGesture(Key.Space));
-            CommandBindings.Add(new CommandBinding(toggleMaximizeCommand, (s, e) => ToggleMaximizeThumbnail()));
         }
 
         /// <summary>

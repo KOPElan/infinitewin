@@ -641,6 +641,7 @@ namespace InfiniteWin
         /// </summary>
         private void UpdateSelectionVisual()
         {
+            // Force update by setting properties directly
             if (_isSelected)
             {
                 // Show selection with a brighter border
@@ -653,6 +654,9 @@ namespace InfiniteWin
                 BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x64, 0x96, 0xFF)); // #6496FF
                 BorderThickness = new Thickness(2);
             }
+            
+            // Force visual update
+            InvalidateVisual();
         }
 
         /// <summary>
