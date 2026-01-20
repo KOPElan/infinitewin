@@ -233,7 +233,7 @@ namespace InfiniteWin
         /// </summary>
         private void Canvas_MouseWheel(object sender, MouseWheelEventArgs e)
         {
-            // Get mouse position relative to the window (parent coordinate space)
+            // Get mouse position relative to the window coordinate space
             Point mousePos = e.GetPosition(this);
 
             // Calculate zoom factor
