@@ -9,6 +9,7 @@ InfiniteWin/
 ├── App.xaml[.cs]                    # Application entry point
 ├── MainWindow.xaml[.cs]             # Main canvas window with zoom/pan
 ├── WindowThumbnailControl.cs        # DWM thumbnail control (P/Invoke)
+├── WindowEmbedControl.cs            # Embedded window control (SetParent)
 └── WindowSelectorDialog.xaml[.cs]   # Window selection dialog
 ```
 
@@ -46,12 +47,14 @@ InfiniteWin/
 **UI Components:**
 - Blue border (#6496FF) with rounded corners
 - Title bar with window title
+- Mode toggle button (⚡, blue, switches to embed mode)
 - Close button (red, top-right)
 - Host border for DWM thumbnail
 
 **Interaction:**
 - Left-click drag: Move thumbnail
 - Double-click: Activate source window
+- Mode toggle button: Switch to embed mode
 - Close button: Remove from canvas
 
 **Key Methods:**
@@ -61,7 +64,35 @@ InfiniteWin/
 - `ActivateSourceWindow()`: Bring source window to foreground
 - `Dispose()`: Clean up DWM resources
 
-#### 4. WindowSelectorDialog (Window Enumeration)
+#### 4. WindowEmbedControl (Window Embedding)
+**Windows API Used:**
+- `SetParent`: Embed window as child window
+- `SetWindowLong`: Modify window style for embedding
+- `SetWindowPos`: Position and size embedded window
+- `GetWindowLong`: Get original window style
+- `SetForegroundWindow`: Focus embedded window
+
+**UI Components:**
+- Blue border (#6496FF) with rounded corners
+- Title bar with "[EMBEDDED]" indicator
+- Mode toggle button (📸, blue, switches back to thumbnail)
+- Close button (red, top-right)
+- Host border containing the embedded window
+
+**Interaction:**
+- Left-click drag: Move embedded window
+- Double-click: Focus embedded window
+- Mode toggle button: Switch back to thumbnail mode
+- Close button: Restore original window and remove from canvas
+- Direct interaction: All mouse/keyboard events work with embedded window
+
+**Key Methods:**
+- `EmbedWindow()`: Use SetParent to embed the window
+- `RestoreWindow()`: Restore window to original parent and style
+- `UpdateEmbeddedWindowSize()`: Update embedded window position/size
+- `Dispose()`: Restore window and clean up resources
+
+#### 5. WindowSelectorDialog (Window Enumeration)
 **Windows API Used:**
 - `EnumWindows`: Enumerate all top-level windows
 - `IsWindowVisible`: Filter visible windows
@@ -127,6 +158,38 @@ struct DWM_THUMBNAIL_PROPERTIES
 - `DWM_TNP_OPACITY = 0x00000004`: Set opacity
 - `DWM_TNP_VISIBLE = 0x00000008`: Set visibility
 - `DWM_TNP_SOURCECLIENTAREAONLY = 0x00000010`: Client area only
+
+### Window Embedding API
+
+```csharp
+// Set window parent (reparent window)
+IntPtr SetParent(
+    IntPtr hWndChild,      // Child window handle
+    IntPtr hWndNewParent   // New parent window handle
+);
+
+// Set window position and size
+bool SetWindowPos(
+    IntPtr hWnd,           // Window handle
+    IntPtr hWndInsertAfter, // Z-order handle
+    int X,                 // X position
+    int Y,                 // Y position
+    int cx,                // Width
+    int cy,                // Height
+    uint uFlags            // Position flags
+);
+
+// Get/Set window style
+int GetWindowLong(IntPtr hWnd, int nIndex);
+int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+```
+
+### Window Styles (for embedding)
+- `GWL_STYLE = -16`: Window style index
+- `WS_CHILD = 0x40000000`: Child window style
+- `WS_VISIBLE = 0x10000000`: Visible window
+- `WS_CAPTION = 0x00C00000`: Title bar (removed when embedding)
+- `WS_THICKFRAME = 0x00040000`: Resizable border (removed when embedding)
 
 ### User32 API
 
@@ -240,13 +303,33 @@ CanvasScaleTransform.ScaleY = newScale;
 3. MainWindow removes control from canvas
 4. `Dispose()` unregisters DWM thumbnail
 
+### Toggling Embed Mode
+1. User clicks ⚡ button on thumbnail
+2. `ModeToggleButton_Click()` fires `ModeToggleRequested` event
+3. MainWindow calls `ToggleWindowMode()`
+4. Thumbnail is disposed and removed
+5. `WindowEmbedControl` is created with same position/size
+6. Window is embedded using `SetParent()`
+7. Window style is modified to remove decorations
+8. Window is positioned inside host border
+
+### Toggling Thumbnail Mode
+1. User clicks 📸 button on embed control
+2. `ModeToggleButton_Click()` fires `ModeToggleRequested` event
+3. MainWindow calls `ToggleEmbedMode()`
+4. Embed control restores original window state
+5. Embed control is disposed and removed
+6. `WindowThumbnailControl` is created with same position/size
+7. DWM thumbnail is registered
+
 ## Resource Management
 
 ### IDisposable Pattern
 
-All `WindowThumbnailControl` instances implement `IDisposable`:
+All `WindowThumbnailControl` and `WindowEmbedControl` instances implement `IDisposable`:
 
 ```csharp
+// WindowThumbnailControl
 public void Dispose()
 {
     if (!_disposed)
@@ -255,6 +338,18 @@ public void Dispose()
         _disposed = true;
     }
     GC.SuppressFinalize(this);
+}
+
+// WindowEmbedControl
+public void Dispose()
+{
+    if (!_disposed)
+    {
+        RestoreWindow();  // Restore original parent and style
+        _disposed = true;
+    }
+    GC.SuppressFinalize(this);
+}
 }
 
 ~WindowThumbnailControl()

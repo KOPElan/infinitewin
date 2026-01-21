@@ -4,14 +4,15 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Shapes;
+using System.Windows.Interop;
 
 namespace InfiniteWin
 {
     /// <summary>
-    /// Control that displays a Windows DWM thumbnail of another window
+    /// Control that embeds a real Windows window as a child window using SetParent
+    /// This allows real interaction with the window, unlike DWM thumbnails which are read-only
     /// </summary>
-    public class WindowThumbnailControl : Border, IDisposable
+    public class WindowEmbedControl : Border, IDisposable
     {
         #region Win32 API Declarations
 
@@ -35,47 +36,14 @@ namespace InfiniteWin
             public int Height => bottom - top;
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        private struct SIZE
-        {
-            public int cx;
-            public int cy;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        private struct DWM_THUMBNAIL_PROPERTIES
-        {
-            public int dwFlags;
-            public RECT rcDestination;
-            public RECT rcSource;
-            public byte opacity;
-            public bool fVisible;
-            public bool fSourceClientAreaOnly;
-        }
-
-        private const int DWM_TNP_RECTDESTINATION = 0x00000001;
-        private const int DWM_TNP_RECTSOURCE = 0x00000002;
-        private const int DWM_TNP_OPACITY = 0x00000004;
-        private const int DWM_TNP_VISIBLE = 0x00000008;
-        private const int DWM_TNP_SOURCECLIENTAREAONLY = 0x00000010;
-
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmRegisterThumbnail(IntPtr dest, IntPtr src, out IntPtr thumb);
-
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmUnregisterThumbnail(IntPtr thumb);
-
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmUpdateThumbnailProperties(IntPtr thumb, ref DWM_THUMBNAIL_PROPERTIES props);
-
-        [DllImport("dwmapi.dll")]
-        private static extern int DwmQueryThumbnailSourceSize(IntPtr thumb, out SIZE size);
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern IntPtr SetParent(IntPtr hWndChild, IntPtr hWndNewParent);
 
         [DllImport("user32.dll")]
-        private static extern bool SetForegroundWindow(IntPtr hWnd);
+        private static extern IntPtr GetParent(IntPtr hWnd);
 
         [DllImport("user32.dll")]
-        private static extern bool IsWindow(IntPtr hWnd);
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
         [DllImport("user32.dll")]
         private static extern bool GetWindowRect(IntPtr hWnd, out RECT lpRect);
@@ -83,11 +51,40 @@ namespace InfiniteWin
         [DllImport("user32.dll", CharSet = CharSet.Unicode)]
         private static extern int GetWindowText(IntPtr hWnd, System.Text.StringBuilder text, int count);
 
+        [DllImport("user32.dll")]
+        private static extern bool IsWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern int GetWindowLong(IntPtr hWnd, int nIndex);
+
+        [DllImport("user32.dll")]
+        private static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
+
+        private const int GWL_STYLE = -16;
+        private const int WS_CAPTION = 0x00C00000;
+        private const int WS_THICKFRAME = 0x00040000;
+        private const int WS_MINIMIZE = 0x20000000;
+        private const int WS_MAXIMIZE = 0x01000000;
+        private const int WS_SYSMENU = 0x00080000;
+        private const int WS_CHILD = 0x40000000;
+        private const int WS_VISIBLE = 0x10000000;
+
+        private const uint SWP_NOZORDER = 0x0004;
+        private const uint SWP_NOACTIVATE = 0x0010;
+        private const uint SWP_SHOWWINDOW = 0x0040;
+        private const uint SWP_FRAMECHANGED = 0x0020;
+        private const uint SWP_NOMOVE = 0x0002;
+        private const uint SWP_NOSIZE = 0x0001;
+
         #endregion
 
         private IntPtr _sourceWindow;
-        private IntPtr _thumbnail = IntPtr.Zero;
-        private IntPtr _hostHandle = IntPtr.Zero;
+        private IntPtr _originalParent = IntPtr.Zero;
+        private int _originalStyle = 0;
+        private bool _isEmbedded = false; // Track if window is successfully embedded
         private bool _disposed = false;
         
         private Point _dragStartPosition;
@@ -110,7 +107,7 @@ namespace InfiniteWin
         private double _resizeStartTop;
         private ResizeDirection _resizeDirection;
 
-        private const double MinimumThumbnailSize = 100;
+        private const double MinimumWindowSize = 100;
 
         private enum ResizeDirection
         {
@@ -118,11 +115,7 @@ namespace InfiniteWin
             BottomRight,
             BottomLeft,
             TopRight,
-            TopLeft,
-            Right,
-            Left,
-            Bottom,
-            Top
+            TopLeft
         }
 
         public event EventHandler? CloseRequested;
@@ -136,15 +129,9 @@ namespace InfiniteWin
         public IntPtr SourceWindow => _sourceWindow;
         public string WindowTitle { get; private set; } = string.Empty;
 
-        // Selection and maximize state
+        // Selection state
         private bool _isSelected = false;
-        private bool _isMaximized = false;
-        private double _savedLeft;
-        private double _savedTop;
-        private double _savedWidth;
-        private double _savedHeight;
 
-        // Selection changed event
         public event EventHandler? SelectionChanged;
 
         public bool IsSelected
@@ -163,10 +150,11 @@ namespace InfiniteWin
 
         private const double DefaultWidth = 400;
         private const double DefaultHeight = 300;
-        private const double MaxInitialWidth = 800;  // Increased for better resolution
-        private const double MaxInitialHeight = 600; // Increased for better resolution
+        private const double MaxInitialWidth = 800;
+        private const double MaxInitialHeight = 600;
+        private const string EmbeddedWindowSuffix = " [EMBEDDED]";
 
-        public WindowThumbnailControl(IntPtr sourceWindow)
+        public WindowEmbedControl(IntPtr sourceWindow)
         {
             _sourceWindow = sourceWindow;
             WindowTitle = GetWindowTitle(_sourceWindow);
@@ -177,15 +165,16 @@ namespace InfiniteWin
             CornerRadius = new CornerRadius(8);
             Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x1E, 0x1E, 0x1E));
             
-            // Create container for thumbnail
+            // Create container for embedded window
             var grid = new Grid();
             
-            // Host border for the DWM thumbnail
+            // Host border for the embedded window
             _hostBorder = new Border
             {
                 Background = Brushes.Black,
                 CornerRadius = new CornerRadius(6),
-                Margin = new Thickness(5, 25, 5, 5)
+                Margin = new Thickness(5, 25, 5, 5),
+                ClipToBounds = true
             };
             grid.Children.Add(_hostBorder);
 
@@ -204,7 +193,7 @@ namespace InfiniteWin
             // Window title
             _titleText = new TextBlock
             {
-                Text = WindowTitle,
+                Text = WindowTitle + EmbeddedWindowSuffix,
                 Foreground = Brushes.White,
                 VerticalAlignment = VerticalAlignment.Center,
                 Margin = new Thickness(8, 0, 0, 0),
@@ -213,10 +202,10 @@ namespace InfiniteWin
             };
             titleGrid.Children.Add(_titleText);
 
-            // Mode toggle button (embed/thumbnail)
+            // Mode toggle button (switch back to thumbnail)
             _modeToggleButton = new Button
             {
-                Content = "⚡",
+                Content = "📸",
                 Width = 20,
                 Height = 20,
                 FontSize = 12,
@@ -227,7 +216,7 @@ namespace InfiniteWin
                 Foreground = Brushes.White,
                 BorderThickness = new Thickness(0),
                 Cursor = Cursors.Hand,
-                ToolTip = "Toggle embed mode (interact with window)"
+                ToolTip = "Toggle thumbnail mode (read-only view)"
             };
             _modeToggleButton.Click += ModeToggleButton_Click;
             titleGrid.Children.Add(_modeToggleButton);
@@ -365,13 +354,13 @@ namespace InfiniteWin
                     }
 
                     // Enforce minimum size
-                    newWidth = Math.Max(MinimumThumbnailSize, newWidth);
-                    newHeight = Math.Max(MinimumThumbnailSize, newHeight);
+                    newWidth = Math.Max(MinimumWindowSize, newWidth);
+                    newHeight = Math.Max(MinimumWindowSize, newHeight);
 
                     Width = newWidth;
                     Height = newHeight;
 
-                    UpdateThumbnail();
+                    UpdateEmbeddedWindowSize();
                     e.Handled = true;
                 }
             };
@@ -387,57 +376,29 @@ namespace InfiniteWin
                 int sourceWidth = rect.Width;
                 int sourceHeight = rect.Height;
                 
-                // Check if window appears to be minimized (very small dimensions)
-                // Minimized windows typically have very small sizes on taskbar
-                bool likelyMinimized = sourceWidth < 50 || sourceHeight < 50;
-                
-                if (sourceWidth > 0 && sourceHeight > 0 && !likelyMinimized)
+                if (sourceWidth > 0 && sourceHeight > 0)
                 {
                     CalculateAndSetSize(sourceWidth, sourceHeight);
                     return;
                 }
             }
             
-            // Fallback to default size if we can't get window dimensions or window is minimized
+            // Fallback to default size
             Width = DefaultWidth;
             Height = DefaultHeight;
         }
 
         /// <summary>
-        /// Update size based on DWM thumbnail source size (called after thumbnail registration)
-        /// This provides accurate dimensions even for minimized windows
-        /// </summary>
-        private void UpdateSizeFromThumbnail()
-        {
-            if (_thumbnail == IntPtr.Zero)
-                return;
-
-            try
-            {
-                int result = DwmQueryThumbnailSourceSize(_thumbnail, out SIZE size);
-                if (result == 0 && size.cx > 0 && size.cy > 0)
-                {
-                    CalculateAndSetSize(size.cx, size.cy);
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Failed to query thumbnail size: {ex.Message}");
-            }
-        }
-
-        /// <summary>
-        /// Calculate thumbnail size maintaining aspect ratio with size constraints
+        /// Calculate window size maintaining aspect ratio with size constraints
         /// </summary>
         private void CalculateAndSetSize(int sourceWidth, int sourceHeight)
         {
             // Calculate aspect ratio
             double aspectRatio = (double)sourceWidth / sourceHeight;
             
-            // Clamp aspect ratio to reasonable bounds to avoid extremely distorted thumbnails
-            // This handles edge cases like extremely wide or tall windows
-            const double MinAspectRatio = 0.2;  // 1:5 (very tall)
-            const double MaxAspectRatio = 5.0;  // 5:1 (very wide)
+            // Clamp aspect ratio to reasonable bounds
+            const double MinAspectRatio = 0.2;
+            const double MaxAspectRatio = 5.0;
             aspectRatio = Math.Max(MinAspectRatio, Math.Min(MaxAspectRatio, aspectRatio));
             
             // Start with a target width, constrain to max
@@ -451,7 +412,7 @@ namespace InfiniteWin
                 targetWidth = targetHeight * aspectRatio;
             }
             
-            // Ensure minimum size (at least 200px on the smaller dimension)
+            // Ensure minimum size
             const double MinDimension = 200;
             if (targetWidth < MinDimension && targetHeight < MinDimension)
             {
@@ -473,67 +434,123 @@ namespace InfiniteWin
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
-            // Get the host window handle
-            var window = Window.GetWindow(this);
-            if (window != null)
-            {
-                _hostHandle = new System.Windows.Interop.WindowInteropHelper(window).Handle;
-                RegisterThumbnail();
-            }
+            EmbedWindow();
         }
 
         private void OnUnloaded(object sender, RoutedEventArgs e)
         {
-            UnregisterThumbnail();
+            RestoreWindow();
         }
 
-        private void RegisterThumbnail()
+        /// <summary>
+        /// Embed the window by setting this application as its parent
+        /// </summary>
+        private void EmbedWindow()
         {
-            if (_hostHandle == IntPtr.Zero || _sourceWindow == IntPtr.Zero)
+            if (_sourceWindow == IntPtr.Zero || !IsWindow(_sourceWindow))
                 return;
-
-            if (_thumbnail != IntPtr.Zero)
-                UnregisterThumbnail();
 
             try
             {
-                int result = DwmRegisterThumbnail(_hostHandle, _sourceWindow, out _thumbnail);
-                if (result == 0 && _thumbnail != IntPtr.Zero)
-                {
-                    // Now that thumbnail is registered, update size based on actual content
-                    UpdateSizeFromThumbnail();
-                    UpdateThumbnail();
-                }
+                // Save original parent before modifying it
+                // Note: GetParent returns IntPtr.Zero for top-level windows (desktop parent)
+                // When restoring, SetParent with IntPtr.Zero will restore the window to the desktop
+                _originalParent = GetParent(_sourceWindow);
+                
+                // Save original window style
+                _originalStyle = GetWindowLong(_sourceWindow, GWL_STYLE);
+
+                // Get the host window handle
+                var window = Window.GetWindow(this);
+                if (window == null)
+                    return;
+
+                var hostHandle = new WindowInteropHelper(window).Handle;
+                
+                // Calculate and apply child window style first (before changing parent)
+                int childStyle = CalculateEmbedStyle(_originalStyle);
+                SetWindowLong(_sourceWindow, GWL_STYLE, childStyle);
+                
+                // Set our application window as the parent
+                SetParent(_sourceWindow, hostHandle);
+
+                // Force window frame to update to reflect style changes
+                SetWindowPos(_sourceWindow, IntPtr.Zero, 0, 0, 0, 0,
+                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+
+                // Position and size the embedded window
+                UpdateEmbeddedWindowSize();
+                
+                // Mark as successfully embedded
+                _isEmbedded = true;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to register thumbnail: {ex.Message}");
-            }
-        }
-
-        private void UnregisterThumbnail()
-        {
-            if (_thumbnail != IntPtr.Zero)
-            {
-                try
-                {
-                    DwmUnregisterThumbnail(_thumbnail);
-                }
-                catch { }
-                finally
-                {
-                    _thumbnail = IntPtr.Zero;
-                }
+                System.Diagnostics.Debug.WriteLine($"Failed to embed window: {ex.Message}");
+                _isEmbedded = false;
             }
         }
 
         /// <summary>
-        /// Update the DWM thumbnail position and size
-        /// Call this when the control position changes or canvas transforms change
+        /// Calculate the window style for embedding (remove decorations, add child flags)
         /// </summary>
-        public void UpdateThumbnail()
+        private int CalculateEmbedStyle(int originalStyle)
         {
-            if (_thumbnail == IntPtr.Zero || _hostBorder == null)
+            int style = originalStyle;
+            
+            // Remove window decorations
+            style &= ~WS_CAPTION;
+            style &= ~WS_THICKFRAME;
+            style &= ~WS_MINIMIZE;
+            style &= ~WS_MAXIMIZE;
+            style &= ~WS_SYSMENU;
+            
+            // Add child window flags
+            style |= WS_CHILD;
+            style |= WS_VISIBLE;
+            
+            return style;
+        }
+
+        /// <summary>
+        /// Restore the window to its original state
+        /// </summary>
+        private void RestoreWindow()
+        {
+            if (_sourceWindow == IntPtr.Zero || !IsWindow(_sourceWindow))
+                return;
+
+            // Only restore if we actually embedded the window
+            if (!_isEmbedded)
+                return;
+
+            try
+            {
+                // Restore original window style
+                SetWindowLong(_sourceWindow, GWL_STYLE, _originalStyle);
+
+                // Restore original parent
+                // If _originalParent is IntPtr.Zero, this restores to desktop (for top-level windows)
+                SetParent(_sourceWindow, _originalParent);
+
+                // Force window to update its frame (don't move or resize)
+                SetWindowPos(_sourceWindow, IntPtr.Zero, 0, 0, 0, 0,
+                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+                
+                _isEmbedded = false;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Failed to restore window: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Update the embedded window's position and size
+        /// </summary>
+        public void UpdateEmbeddedWindowSize()
+        {
+            if (_sourceWindow == IntPtr.Zero || !IsWindow(_sourceWindow) || _hostBorder == null)
                 return;
 
             try
@@ -541,6 +558,9 @@ namespace InfiniteWin
                 var window = Window.GetWindow(this);
                 if (window == null)
                     return;
+
+                // Get the position of the host border in window coordinates
+                var topLeft = _hostBorder.TransformToAncestor(window).Transform(new Point(0, 0));
 
                 // Get DPI scale factors
                 var source = PresentationSource.FromVisual(window);
@@ -550,38 +570,30 @@ namespace InfiniteWin
                 double dpiScaleX = source.CompositionTarget.TransformToDevice.M11;
                 double dpiScaleY = source.CompositionTarget.TransformToDevice.M22;
 
-                // Get the four corners of the host border in window coordinates to account for transforms
-                var topLeft = _hostBorder.TransformToAncestor(window).Transform(new Point(0, 0));
-                var bottomRight = _hostBorder.TransformToAncestor(window).Transform(
-                    new Point(_hostBorder.ActualWidth, _hostBorder.ActualHeight));
-
-                // Convert from WPF DIPs to physical pixels for DWM
+                // Convert from WPF DIPs to physical pixels
                 int left = (int)(topLeft.X * dpiScaleX);
                 int top = (int)(topLeft.Y * dpiScaleY);
-                int right = (int)(bottomRight.X * dpiScaleX);
-                int bottom = (int)(bottomRight.Y * dpiScaleY);
+                int width = (int)(_hostBorder.ActualWidth * dpiScaleX);
+                int height = (int)(_hostBorder.ActualHeight * dpiScaleY);
 
-                var props = new DWM_THUMBNAIL_PROPERTIES
-                {
-                    dwFlags = DWM_TNP_RECTDESTINATION | DWM_TNP_VISIBLE | DWM_TNP_OPACITY | DWM_TNP_SOURCECLIENTAREAONLY,
-                    rcDestination = new RECT(left, top, right, bottom),
-                    opacity = 255,
-                    fVisible = true,
-                    fSourceClientAreaOnly = false
-                };
+                // Ensure minimum size
+                width = Math.Max(50, width);
+                height = Math.Max(50, height);
 
-                DwmUpdateThumbnailProperties(_thumbnail, ref props);
+                // Position and size the embedded window
+                SetWindowPos(_sourceWindow, IntPtr.Zero, left, top, width, height,
+                    SWP_NOZORDER | SWP_NOACTIVATE | SWP_SHOWWINDOW);
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Failed to update thumbnail: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Failed to update embedded window: {ex.Message}");
             }
         }
 
         protected override void OnRenderSizeChanged(SizeChangedInfo sizeInfo)
         {
             base.OnRenderSizeChanged(sizeInfo);
-            UpdateThumbnail();
+            UpdateEmbeddedWindowSize();
         }
 
         private void OnMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -591,19 +603,22 @@ namespace InfiniteWin
                 return;
 
             // Bring to front by reordering in parent Canvas
-            // This ensures both WPF elements and DWM thumbnails appear in correct order
+            // This ensures both WPF elements and embedded windows appear in correct order
             BringToFront();
 
-            // Select this thumbnail on click
+            // Select this window on click
             IsSelected = true;
 
             // Check for double-click
             DateTime now = DateTime.Now;
             if ((now - _lastClickTime).TotalMilliseconds < DoubleClickMilliseconds)
             {
-                // Double-click detected
-                ActivateSourceWindow();
-                _lastClickTime = DateTime.MinValue; // Reset to prevent triple-click
+                // Double-click detected - bring embedded window to focus
+                if (IsWindow(_sourceWindow))
+                {
+                    SetForegroundWindow(_sourceWindow);
+                }
+                _lastClickTime = DateTime.MinValue;
                 e.Handled = true;
                 return;
             }
@@ -613,7 +628,6 @@ namespace InfiniteWin
             _dragStartPosition = e.GetPosition(Parent as UIElement);
             CaptureMouse();
             
-            // Notify drag started
             DragStarted?.Invoke(this, EventArgs.Empty);
             
             e.Handled = true;
@@ -621,7 +635,7 @@ namespace InfiniteWin
 
         /// <summary>
         /// Bring this window to the front by moving it to the end of parent's children collection
-        /// This ensures both WPF rendering and DWM thumbnail overlay order are correct
+        /// This ensures both WPF rendering and embedded window overlay order are correct
         /// </summary>
         private void BringToFront()
         {
@@ -634,11 +648,8 @@ namespace InfiniteWin
                     panel.Children.RemoveAt(index);
                     panel.Children.Add(this);
                     
-                    // Unregister and re-register DWM thumbnail to change its z-order
-                    // DWM thumbnails are rendered in registration order, so we need to re-register
-                    // to bring this thumbnail to the top
-                    UnregisterThumbnail();
-                    Dispatcher.BeginInvoke(new Action(() => RegisterThumbnail()), System.Windows.Threading.DispatcherPriority.Render);
+                    // Defer window update to allow visual tree to update first
+                    Dispatcher.BeginInvoke(new Action(() => UpdateEmbeddedWindowSize()), System.Windows.Threading.DispatcherPriority.Render);
                 }
             }
         }
@@ -650,7 +661,6 @@ namespace InfiniteWin
                 _isDragging = false;
                 ReleaseMouseCapture();
                 
-                // Notify drag completed
                 DragCompleted?.Invoke(this, EventArgs.Empty);
                 
                 e.Handled = true;
@@ -666,7 +676,6 @@ namespace InfiniteWin
                 double left = Canvas.GetLeft(this);
                 double top = Canvas.GetTop(this);
                 
-                // Handle NaN values
                 if (double.IsNaN(left)) left = 0;
                 if (double.IsNaN(top)) top = 0;
 
@@ -677,19 +686,10 @@ namespace InfiniteWin
 
                 _dragStartPosition = currentPosition;
                 
-                // Update DWM thumbnail position during drag
-                UpdateThumbnail();
+                // Update embedded window position during drag
+                UpdateEmbeddedWindowSize();
                 
                 e.Handled = true;
-            }
-        }
-
-        private void ActivateSourceWindow()
-        {
-            // Activate the source window
-            if (IsWindow(_sourceWindow))
-            {
-                SetForegroundWindow(_sourceWindow);
             }
         }
 
@@ -710,103 +710,16 @@ namespace InfiniteWin
         {
             if (_isSelected)
             {
-                // Show selection with a brighter border
                 BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xD7, 0x00)); // Gold
                 BorderThickness = new Thickness(3);
             }
             else
             {
-                // Normal border
                 BorderBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x64, 0x96, 0xFF)); // #6496FF
                 BorderThickness = new Thickness(2);
             }
             
-            // Force visual update
             InvalidateVisual();
-        }
-
-        /// <summary>
-        /// Toggle between maximized (filling parent window) and normal size
-        /// </summary>
-        public void ToggleMaximize(double parentWidth, double parentHeight)
-        {
-            // Validate parent dimensions
-            if (parentWidth <= 0 || parentHeight <= 0)
-            {
-                System.Diagnostics.Debug.WriteLine("Cannot maximize: invalid parent dimensions");
-                return;
-            }
-
-            if (Parent is Canvas canvas)
-            {
-                if (!_isMaximized)
-                {
-                    // Save current state
-                    double currentLeft = Canvas.GetLeft(this);
-                    double currentTop = Canvas.GetTop(this);
-                    
-                    // Handle NaN values (not yet positioned)
-                    _savedLeft = double.IsNaN(currentLeft) ? 0 : currentLeft;
-                    _savedTop = double.IsNaN(currentTop) ? 0 : currentTop;
-                    _savedWidth = Width;
-                    _savedHeight = Height;
-
-                    // Validate saved dimensions
-                    if (_savedWidth <= 0 || _savedHeight <= 0)
-                    {
-                        System.Diagnostics.Debug.WriteLine("Cannot maximize: invalid saved dimensions");
-                        return;
-                    }
-
-                    // Maximize to fill parent while preserving aspect ratio
-                    const double margin = 20;
-                    double availableWidth = parentWidth - (margin * 2);
-                    double availableHeight = parentHeight - (margin * 2);
-                    
-                    // Calculate current aspect ratio
-                    double aspectRatio = _savedWidth / _savedHeight;
-                    
-                    // Calculate dimensions that fit within available space while preserving aspect ratio
-                    double newWidth, newHeight;
-                    
-                    // Determine which dimension to fill (the longer edge)
-                    if (availableWidth / availableHeight > aspectRatio)
-                    {
-                        // Height is the limiting factor - fill height
-                        newHeight = availableHeight;
-                        newWidth = newHeight * aspectRatio;
-                    }
-                    else
-                    {
-                        // Width is the limiting factor - fill width
-                        newWidth = availableWidth;
-                        newHeight = newWidth / aspectRatio;
-                    }
-                    
-                    // Center the thumbnail in the available space
-                    double left = margin + (availableWidth - newWidth) / 2;
-                    double top = margin + (availableHeight - newHeight) / 2;
-                    
-                    Canvas.SetLeft(this, left);
-                    Canvas.SetTop(this, top);
-                    Width = newWidth;
-                    Height = newHeight;
-
-                    _isMaximized = true;
-                }
-                else
-                {
-                    // Restore saved state
-                    Canvas.SetLeft(this, _savedLeft);
-                    Canvas.SetTop(this, _savedTop);
-                    Width = _savedWidth;
-                    Height = _savedHeight;
-
-                    _isMaximized = false;
-                }
-
-                UpdateThumbnail();
-            }
         }
 
         /// <summary>
@@ -821,7 +734,6 @@ namespace InfiniteWin
         {
             if (!_disposed)
             {
-                // Stop dragging if currently dragging
                 if (_isDragging)
                 {
                     _isDragging = false;
@@ -831,19 +743,18 @@ namespace InfiniteWin
                     }
                 }
                 
-                // Stop resizing if currently resizing
                 if (_isResizing)
                 {
                     _isResizing = false;
                 }
                 
-                UnregisterThumbnail();
+                RestoreWindow();
                 _disposed = true;
             }
             GC.SuppressFinalize(this);
         }
 
-        ~WindowThumbnailControl()
+        ~WindowEmbedControl()
         {
             Dispose();
         }
