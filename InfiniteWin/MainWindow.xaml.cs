@@ -908,6 +908,11 @@ namespace InfiniteWin
                 {
                     thumbnail.UpdateThumbnail();
                 }
+                else if (child is WindowEmbedControl embedControl)
+                {
+                    // Update embedded window position to account for canvas transforms
+                    embedControl.UpdateEmbeddedWindowSize();
+                }
             }
         }
 

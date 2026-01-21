@@ -548,7 +548,7 @@ namespace InfiniteWin
         /// <summary>
         /// Update the embedded window's position and size
         /// </summary>
-        private void UpdateEmbeddedWindowSize()
+        public void UpdateEmbeddedWindowSize()
         {
             if (_sourceWindow == IntPtr.Zero || !IsWindow(_sourceWindow) || _hostBorder == null)
                 return;
