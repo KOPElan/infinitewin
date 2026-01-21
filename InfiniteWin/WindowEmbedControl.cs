@@ -602,6 +602,10 @@ namespace InfiniteWin
             if (e.OriginalSource is Button || _isResizing)
                 return;
 
+            // Bring to front by reordering in parent Canvas
+            // This ensures both WPF elements and embedded windows appear in correct order
+            BringToFront();
+
             // Select this window on click
             IsSelected = true;
 
@@ -627,6 +631,27 @@ namespace InfiniteWin
             DragStarted?.Invoke(this, EventArgs.Empty);
             
             e.Handled = true;
+        }
+
+        /// <summary>
+        /// Bring this window to the front by moving it to the end of parent's children collection
+        /// This ensures both WPF rendering and embedded window overlay order are correct
+        /// </summary>
+        private void BringToFront()
+        {
+            if (Parent is Panel panel)
+            {
+                var index = panel.Children.IndexOf(this);
+                if (index >= 0 && index < panel.Children.Count - 1)
+                {
+                    // Remove and re-add to move to end (rendered last = on top)
+                    panel.Children.RemoveAt(index);
+                    panel.Children.Add(this);
+                    
+                    // Defer window update to allow visual tree to update first
+                    Dispatcher.BeginInvoke(new Action(() => UpdateEmbeddedWindowSize()), System.Windows.Threading.DispatcherPriority.Render);
+                }
+            }
         }
 
         private void OnMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
