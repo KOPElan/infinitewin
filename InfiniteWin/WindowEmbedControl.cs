@@ -81,6 +81,9 @@ namespace InfiniteWin
 
         #endregion
 
+        // Static z-index counter to ensure proper layering between WPF elements and embedded windows
+        private static int _nextZIndex = 0;
+
         private IntPtr _sourceWindow;
         private IntPtr _originalParent = IntPtr.Zero;
         private int _originalStyle = 0;
@@ -634,23 +637,19 @@ namespace InfiniteWin
         }
 
         /// <summary>
-        /// Bring this window to the front by moving it to the end of parent's children collection
-        /// This ensures both WPF rendering and embedded window overlay order are correct
+        /// Bring this window to the front by setting Panel.ZIndex
+        /// This ensures both WPF container and embedded window are at the same level
         /// </summary>
         private void BringToFront()
         {
             if (Parent is Panel panel)
             {
-                var index = panel.Children.IndexOf(this);
-                if (index >= 0 && index < panel.Children.Count - 1)
-                {
-                    // Remove and re-add to move to end (rendered last = on top)
-                    panel.Children.RemoveAt(index);
-                    panel.Children.Add(this);
-                    
-                    // Defer window update to allow visual tree to update first
-                    Dispatcher.BeginInvoke(new Action(() => UpdateEmbeddedWindowSize()), System.Windows.Threading.DispatcherPriority.Render);
-                }
+                // Set Panel.ZIndex to bring this control to the front
+                // This ensures the WPF container (Border) is rendered on top
+                Panel.SetZIndex(this, ++_nextZIndex);
+                
+                // Defer window update to allow visual tree to update first
+                Dispatcher.BeginInvoke(new Action(() => UpdateEmbeddedWindowSize()), System.Windows.Threading.DispatcherPriority.Render);
             }
         }
 

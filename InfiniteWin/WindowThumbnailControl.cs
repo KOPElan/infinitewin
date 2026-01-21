@@ -85,6 +85,9 @@ namespace InfiniteWin
 
         #endregion
 
+        // Static z-index counter to ensure proper layering between WPF elements and DWM thumbnails
+        private static int _nextZIndex = 0;
+
         private IntPtr _sourceWindow;
         private IntPtr _thumbnail = IntPtr.Zero;
         private IntPtr _hostHandle = IntPtr.Zero;
@@ -620,26 +623,22 @@ namespace InfiniteWin
         }
 
         /// <summary>
-        /// Bring this window to the front by moving it to the end of parent's children collection
-        /// This ensures both WPF rendering and DWM thumbnail overlay order are correct
+        /// Bring this window to the front by setting Panel.ZIndex and re-registering DWM thumbnail
+        /// This ensures both WPF container and DWM thumbnail overlay are at the same level
         /// </summary>
         private void BringToFront()
         {
             if (Parent is Panel panel)
             {
-                var index = panel.Children.IndexOf(this);
-                if (index >= 0 && index < panel.Children.Count - 1)
-                {
-                    // Remove and re-add to move to end (rendered last = on top)
-                    panel.Children.RemoveAt(index);
-                    panel.Children.Add(this);
-                    
-                    // Unregister and re-register DWM thumbnail to change its z-order
-                    // DWM thumbnails are rendered in registration order, so we need to re-register
-                    // to bring this thumbnail to the top
-                    UnregisterThumbnail();
-                    Dispatcher.BeginInvoke(new Action(() => RegisterThumbnail()), System.Windows.Threading.DispatcherPriority.Render);
-                }
+                // Set Panel.ZIndex to bring this control to the front
+                // This ensures the WPF container (Border) is rendered on top
+                Panel.SetZIndex(this, ++_nextZIndex);
+                
+                // Unregister and re-register DWM thumbnail to change its z-order
+                // DWM thumbnails are rendered in registration order, so we need to re-register
+                // to bring this thumbnail to the top of the DWM overlay layer
+                UnregisterThumbnail();
+                Dispatcher.BeginInvoke(new Action(() => RegisterThumbnail()), System.Windows.Threading.DispatcherPriority.Render);
             }
         }
 
