@@ -106,6 +106,8 @@ namespace InfiniteWin
         private Point _resizeStartPosition;
         private double _resizeStartWidth;
         private double _resizeStartHeight;
+        private double _resizeStartLeft;
+        private double _resizeStartTop;
         private ResizeDirection _resizeDirection;
 
         private const double MinimumThumbnailSize = 100;
@@ -304,6 +306,13 @@ namespace InfiniteWin
                 _resizeStartPosition = e.GetPosition(Parent as UIElement);
                 _resizeStartWidth = Width;
                 _resizeStartHeight = Height;
+                
+                // Save original position
+                _resizeStartLeft = Canvas.GetLeft(this);
+                _resizeStartTop = Canvas.GetTop(this);
+                if (double.IsNaN(_resizeStartLeft)) _resizeStartLeft = 0;
+                if (double.IsNaN(_resizeStartTop)) _resizeStartTop = 0;
+                
                 handle.CaptureMouse();
                 ResizeStarted?.Invoke(this, EventArgs.Empty);
                 e.Handled = true;
@@ -329,11 +338,6 @@ namespace InfiniteWin
 
                     double newWidth = _resizeStartWidth;
                     double newHeight = _resizeStartHeight;
-                    double left = Canvas.GetLeft(this);
-                    double top = Canvas.GetTop(this);
-
-                    if (double.IsNaN(left)) left = 0;
-                    if (double.IsNaN(top)) top = 0;
 
                     // Calculate new size based on resize direction
                     switch (_resizeDirection)
@@ -345,18 +349,18 @@ namespace InfiniteWin
                         case ResizeDirection.BottomLeft:
                             newWidth = _resizeStartWidth - delta.X;
                             newHeight = _resizeStartHeight + delta.Y;
-                            Canvas.SetLeft(this, left + delta.X);
+                            Canvas.SetLeft(this, _resizeStartLeft + delta.X);
                             break;
                         case ResizeDirection.TopRight:
                             newWidth = _resizeStartWidth + delta.X;
                             newHeight = _resizeStartHeight - delta.Y;
-                            Canvas.SetTop(this, top + delta.Y);
+                            Canvas.SetTop(this, _resizeStartTop + delta.Y);
                             break;
                         case ResizeDirection.TopLeft:
                             newWidth = _resizeStartWidth - delta.X;
                             newHeight = _resizeStartHeight - delta.Y;
-                            Canvas.SetLeft(this, left + delta.X);
-                            Canvas.SetTop(this, top + delta.Y);
+                            Canvas.SetLeft(this, _resizeStartLeft + delta.X);
+                            Canvas.SetTop(this, _resizeStartTop + delta.Y);
                             break;
                     }
 
