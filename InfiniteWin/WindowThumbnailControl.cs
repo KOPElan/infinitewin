@@ -634,8 +634,11 @@ namespace InfiniteWin
                     panel.Children.RemoveAt(index);
                     panel.Children.Add(this);
                     
-                    // Defer thumbnail update to allow visual tree to update first
-                    Dispatcher.BeginInvoke(new Action(() => UpdateThumbnail()), System.Windows.Threading.DispatcherPriority.Render);
+                    // Unregister and re-register DWM thumbnail to change its z-order
+                    // DWM thumbnails are rendered in registration order, so we need to re-register
+                    // to bring this thumbnail to the top
+                    UnregisterThumbnail();
+                    Dispatcher.BeginInvoke(new Action(() => RegisterThumbnail()), System.Windows.Threading.DispatcherPriority.Render);
                 }
             }
         }
